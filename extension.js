@@ -44,11 +44,11 @@ async function upload()/*: Promise<void>*/ {
                 webdav.writeFile(remoteFile, editor.document.getText(), err => {
                     if (err == null) {
                         const fileName = remoteFile.slice(remoteFile.lastIndexOf('/') + 1);
-                        vscode.window.showInformationMessage(`Uploaded: ${fileName}`);
+                        vscode.window.showInformationMessage(`Uploaded: ${fileName} to ${webdav.config.hostname}`);
                         resolve();
                     } else {
                         console.error(err);
-                        vscode.window.showErrorMessage('Failed to upload file to remote host: ' + err.message);
+                        vscode.window.showErrorMessage(`Failed to upload file to remote host ${webdav.config.hostname}: ` + err.message);
                         reject(err);
                     }
                 });
@@ -83,7 +83,7 @@ async function compare() {
                     });
 
                     if (!data) {
-                        reject("Cannot download remote file " + remoteFile);
+                        reject("Cannot download remote file " + remoteFile + ` from ${webdav.config.remoteEndpoint.hostname}`);
                         return;
                     }
 
@@ -100,6 +100,7 @@ async function compare() {
                                 selection: null // Don't select any text in the compare
                             }
                         );
+                        vscode.window.showInformationMessage(`Comparing: ${fileName} with ${webdav.config.hostname}`);
                         resolve(undefined);
                     } catch (error) {
                         console.log(error);
@@ -109,7 +110,7 @@ async function compare() {
             });
         });
     } catch (err) {
-        console.error('Error during compare:', err);
+        console.error(`Error during compare:`, err);
         vscode.window.showErrorMessage('Error during compare:', err);
     }
 }
@@ -132,6 +133,8 @@ async function doWebdavAction(webdavAction /*: (webdav: any, workingFile: string
         return;
     }
 
+    console.log('config:', config);
+
     // Ignore SSL errors, needed for self-signed certificates
     if (config.remoteEndpoint?.ignoreSSLErrors) {
         process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -140,6 +143,7 @@ async function doWebdavAction(webdavAction /*: (webdav: any, workingFile: string
     // Initialize WebDAV and remote file path
     const remoteFile = workingFile.replace(/\\/g, '/').replace(vscode.workspace.rootPath.replace(/\\/g, '/') + config.localRootPath, '');
     const url = nodeUrl.parse(config.remoteEndpoint.url);
+    config.remoteEndpoint.hostname = url.hostname;
     const credentialsKey = url.port ? url.hostname + ":" + url.port : url.hostname;
 
     try {
@@ -156,6 +160,8 @@ async function doWebdavAction(webdavAction /*: (webdav: any, workingFile: string
             username: credentials._username,
             password: credentials._password
         });
+
+        webdav.config = config.remoteEndpoint;
 
         // Perform WebDAV action
         await webdavAction(webdav, workingFile, remoteFile);
