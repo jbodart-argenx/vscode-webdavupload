@@ -18,12 +18,21 @@
         "commands": [
             {
                 "command": "extension.webdavUpload",
-                "title": "Upload to remote WebDAV",
+                "title": "Upload to remote WebDAV file",
                 "category": "WebDAV"
             },
             {
                 "command": "extension.webdavCompare",
-                "title": "Compare with remote WebDAV",
+                "title": "Compare with remote WebDAV file",
+                "category": "WebDAV"
+            },{
+                "command": "extension.restApiUpload",
+                "title": "Upload to LSAF Rest API file",
+                "category": "WebDAV"
+            },
+            {
+                "command": "extension.restApiCompare",
+                "title": "Compare with LSAF Rest API file",
                 "category": "WebDAV"
             }
         ],
@@ -37,6 +46,16 @@
                 {
                     "when": "editorTextFocus",
                     "command": "extension.webdavUpload",
+                    "group": "webdav"
+                },
+                {
+                    "when": "editorTextFocus",
+                    "command": "extension.restApiCompare",
+                    "group": "webdav"
+                },
+                {
+                    "when": "editorTextFocus",
+                    "command": "extension.restApiUpload",
                     "group": "webdav"
                 }
             ]
