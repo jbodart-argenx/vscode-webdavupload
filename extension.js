@@ -14,7 +14,8 @@ const fetch = require("node-fetch"); // Node.js equivalent to native Browser fet
 const tmp = require("tmp");
 tmp.setGracefulCleanup();   // remove all controlled temporary objects on process exit
 
-const Headers = require("./headers"); // custom Headers class equivalent to native Browser Headers
+// const Headers = require("./headers"); // custom Headers class equivalent to native Browser Headers
+// const { rest } = require("underscore");
 
 const credStore = new CredentialStore.CredentialStore(
     "vscode-webdav:",
@@ -29,17 +30,27 @@ const EMPTY_CREDENTIALS = {
 };
 
 function activate(context) {
-    const uploadCommand = vscode.commands.registerCommand(
+    const webdavUploadCommand = vscode.commands.registerCommand(
         "extension.webdavUpload",
-        upload
+        webdavUpload
     );
-    const compareCommand = vscode.commands.registerCommand(
+    const webdavCompareCommand = vscode.commands.registerCommand(
         "extension.webdavCompare",
-        compare
+        webdavCompare
+    );
+    const restApiUploadCommand = vscode.commands.registerCommand(
+        "extension.restApiUpload",
+        restApiUpload
+    );
+    const restApiCompareCommand = vscode.commands.registerCommand(
+        "extension.restApiCompare",
+        restApiCompare
     );
 
-    context.subscriptions.push(uploadCommand);
-    context.subscriptions.push(compareCommand);
+    context.subscriptions.push(webdavUploadCommand);
+    context.subscriptions.push(webdavCompareCommand);
+    context.subscriptions.push(restApiUploadCommand);
+    context.subscriptions.push(restApiCompareCommand);
 }
 
 exports.activate = activate;
@@ -52,94 +63,263 @@ exports.deactivate = deactivate;
 // REST API functions
 class RestApi {
 
-
-    constructor(username, host) {
+    constructor(username = null, host = null) {
         this.username = username;
         this.host = host;
-        this.apiUrl = `https://${this.host}/api`;
-        this.encryptPassword = null;
+        this.encryptedPassword = null;
         this.authToken = null;
+        this.remoteFile = null;
+        this.localFile = null;
+        this.tempFile = null;
         this.fileContents = null;
+        this.config = null;
     }
+
+    get apiUrl () {
+        return this.host ? `https://${this.host}/lsaf/api` : null;
+    }
+
+    async getEndPointConfig() {
+        if (!vscode.window.activeTextEditor) {
+            vscode.window.showErrorMessage("Cannot find an active text editor...");
+            return;
+        }
+    
+        this.localFile = vscode.window.activeTextEditor.document.uri.fsPath;
+        const workingDir = this.localFile.slice(0, this.localFile.lastIndexOf(path.sep));
+        /*
+        console.log('workspaceFolders:', vscode.workspace.workspaceFolders);
+        console.log('workingWSFolder:', workingWSFolder);
+        console.log('workingWSFolder.uri:', workingWSFolder.uri);
+        console.log('workingWSFolder.uri.fsPath:', workingWSFolder.uri.fsPath);
+        */
+    
+        // Read configuration
+        const config = await getEndpointConfigForCurrentPath(workingDir);
+    
+        if (!config) {
+            vscode.window.showErrorMessage(
+                "Configuration not found for the current path."
+            );
+            return;
+        }
+    
+        console.log("config:", config);
+        this.config = config;
+
+        const workingWSFolder = vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri);
+        
+        const remoteFile = this.localFile
+            .replace(/\\/g, "/")
+            .replace(
+                // vscode.workspace.rootPath.replace(/\\/g, "/") + config.localRootPath,
+                workingWSFolder.uri.fsPath.replace(/\\/g, "/") + config.localRootPath,
+                ""
+            );
+        console.log('remoteFile:', remoteFile);
+        this.remoteFile = remoteFile;
+        console.log('this.remoteFile:', this.remoteFile);
+
+        const url = new URL(this.config.remoteEndpoint.url);
+        this.host = url.hostname;
+        const credentialsKey = url.port
+            ? url.hostname + ":" + url.port
+            : url.hostname;
+        console.log('credentialsKey:', credentialsKey);
+    }
+
 
     async encryptPassword(password) {
         const url = `${this.apiUrl}/encrypt`;
-        const myHeaders = new Headers();
-        myHeaders.append(
-            "Authorization",
-            "Basic " + btoa(this.username + ":" + password)
-        );
+        console.log('password:', password);
         const requestOptions = {
             method: "GET",
-            headers: myHeaders,
+            headers: {
+                "Authorization": "Basic " + btoa(this.username + ":" + password)
+            },
             redirect: "follow",
         };
-        fetch(url, requestOptions)
-            .then((response) => response.text())
-            .then((result) => {
-                console.log(result);
-                this.encryptedPassword = result;
-            })
-            .catch((error) => console.error(error));
+        try {
+            const response = await fetch(url, requestOptions);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
+            }
+            const result = await response.text(); 
+            console.log('(encryptPassword) result:', result);
+            this.encryptedPassword = result;
+        } catch (error) {
+            console.error('Error fetching encrypted password:', error);
+        }
     }
 
     async logon() {
-        if (!this.encryptPassword) {
+        if (!this.encryptedPassword) {
             // const password = "abc123";
-            const { _username:username, _password:password}  = getCredentials(`${this.host}.ondemand.sas.com`);
+            const creds  = await getCredentials(this.host);
+            const { _username:username, _password:password}  = creds;
             this.username = username;
             await this.encryptPassword(password);
         }
-        const url = `https://${this.host}.ondemand.sas.com/lsaf/api/logon`;
-        const myHeaders = new Headers();
-        myHeaders.append(
-            "Authorization",
-            "Basic " + btoa(this.username + ":" + this.encryptedPassword)
-        );
+        const url = `https://${this.host}/lsaf/api/logon`;
         const requestOptions = {
             method: "POST",
-            headers: myHeaders,
+            headers: {
+                "Authorization": "Basic " + btoa(this.username + ":" + this.encryptedPassword)
+            },
             redirect: "follow",
         };
-
-        fetch(url, requestOptions)
-            .then((response) => {
+        try {
+            const response = await fetch(url, requestOptions);
+            if (response.ok) {
                 const authToken = response.headers.get("x-auth-token");
                 console.log("authToken", authToken, "response", response);
                 this.authToken = authToken;
-            })
-            .catch((error) => console.error(error));
+            } else {
+                console.log(`${response.status} ${response.statusText}`);
+                const text = await response.text();
+                console.log('response text:', text);
+                throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Error fetching x-auth-token:', error)
+        }
     }
 
-    async getFileContents (filePath) {
+    async getRemoteFileContents () {
         if (!this.authToken) {
             await this.logon();
         }
-        const url = `https://${this.host}.ondemand.sas.com/lsaf/api`;
-        const myHeaders = new Headers();
-        const apiRequest = `/repository/files/${filePath}?component=contents`;
-        myHeaders.append("X-Auth-Token", this.authToken);
+        const apiUrl = `https://${this.host}/lsaf/api`;
+        const urlPath = new URL(this.config.remoteEndpoint.url).pathname
+            .replace(/\/lsaf\/webdav\/work\//, '/workspace/files/')
+            .replace(/\/lsaf\/webdav\/repo\//, '/repository/files/')
+            .replace(/\/$/, '')
+            ;
+        console.log('urlPath:', urlPath)
+        const filePath = this.remoteFile;
+        const apiRequest = `${urlPath}${filePath}?component=contents`;
         const requestOptions = {
             method: "GET",
-            headers: myHeaders,
+            headers: { "X-Auth-Token": this.authToken },
             redirect: "follow",
         };
-
-        fetch(url + apiRequest, requestOptions)
-            .then((response) => {
-                console.log("response", response);
-                return response.text();
-            })
-            .then((responseText) => {
+        try {
+            const response = await fetch(apiUrl + apiRequest, requestOptions);
+            if (!response.ok) {
+                const responseText = await response.text();
                 console.log("responseText", responseText);
-                this.fileContents = responseText;
-            })
-            .catch((error) => console.error(error));
+                throw new Error(`HTTP error! Status: ${response.status}  ${response.statusText}`);
+            }
+            const responseText = await response.text();
+            console.log("responseText", responseText);
+            this.fileContents = responseText;
+        } catch (error) {
+            console.error("Error fetching Remote File Contents:", error);
+            this.fileContents = null;
+        }
     };
+
+    async compareFileContents() {
+        // Write the remote file to a local temporary file
+        const extension = this.localFile.slice(this.localFile.lastIndexOf("."));
+        // Simple synchronous temporary file creation, the file will be closed and unlinked on process exit.
+        this.tempFile = tmp.fileSync({ postfix: extension });
+        console.log("tempFile:", this.tempFile);
+        try {
+            if (!this.fileContents) {
+                await this.getRemoteFileContents ()
+                if (!this.fileContents) {
+                    throw new Error("Failed to get remote file contents.");
+                }
+            }    
+            await fs.promises.writeFile(this.tempFile.name, this.fileContents)
+            console.log(`Downloaded as ${this.tempFile.name}`);
+            // Set the file to read-only (cross-platform)
+            try {
+                await fs.promises.chmod(this.tempFile.name, 0o444);
+                console.log(`File is now read-only: ${this.tempFile.name}`);
+            } catch(err) {
+                console.error(`Failed to set file as read-only: ${err}`);
+            }
+            
+            // Compare after successfully writing the file
+            try {
+                const fileName = this.remoteFile.slice(
+                    this.remoteFile.lastIndexOf("/") + 1
+                );
+                vscode.window.showInformationMessage(
+                    `Comparing: ${fileName} with ${this.host.split(".")[0]} remote file`
+                );
+                await vscode.commands.executeCommand(
+                    "vscode.diff",
+                    vscode.Uri.file(path.normalize(this.tempFile.name)),
+                    vscode.Uri.file(this.localFile),
+                    fileName + ` (${this.host.split(".")[0]} Compare)`,
+                    {
+                        preview: false, 
+                        selection: null, // Don't select any text in the compare
+                    }
+                );
+                // Listen for the diff editor closing
+                const documentCloseListener = vscode.workspace.onDidCloseTextDocument(async (document) => {
+                    console.log(`Closing document URI: ${document.uri.toString()}`);
+                    let normDocPath = path.normalize(document.uri.fsPath);
+                    let normTempFile = path.normalize(this.tempFile.name);
+                    if ( // os.platform() === 'win32' &&
+                        fs.existsSync(normTempFile.toLowerCase()) &&
+                        fs.existsSync(normTempFile.toUpperCase())
+                        ) 
+                    {
+                        // console.log('FileSystem is case-insensitive!');
+                        normDocPath = normDocPath.toLowerCase();
+                        normTempFile = normTempFile.toLowerCase();
+                    }
+                    // If the document being closed is the temp file, delete it
+                    if (normDocPath === normTempFile) {
+                        // Change permissions to writable (0o666 allows read and write for all users)
+                        try {
+                            await fs.promises.chmod(this.tempFile.name, 0o666);
+                            // console.log(`File permissions changed to writable: ${this.tempFile.name}`);
+                        } catch (error) {
+                            console.error(`Error: ${error.message}`);
+                        }
+                        // Delete the temporary file
+                        this.tempFile.removeCallback();
+                        this.tempFile = null;
+                        // Clean up listener
+                        documentCloseListener.dispose();
+                    }
+                });
+            } catch (error) {
+                console.log(error);
+            }
+        } catch (err) {
+            console.error(`Error: ${err.message}`);
+        }
+    }
 
 }
 
-async function upload() /*: Promise<void>*/ {
+
+// 
+
+async function restApiUpload() {
+    const restApi = new RestApi();
+    restApi.getEndPointConfig();
+}
+
+async function restApiCompare() {
+    const restApi = new RestApi();
+    try {
+        await restApi.getEndPointConfig();  // also sets remoteFile based on the contents of the active editor
+        await restApi.getRemoteFileContents();
+        await restApi.compareFileContents();
+    } catch (err) {
+        console.log(err);
+    }
+}
+
+async function webdavUpload() /*: Promise<void>*/ {
     try {
         await doWebdavAction(async (webdav, workingFile, remoteFile) => {
             const editor = vscode.window.activeTextEditor;
@@ -178,7 +358,7 @@ async function upload() /*: Promise<void>*/ {
     }
 }
 
-async function compare() {
+async function webdavCompare() {
     try {
         await doWebdavAction(async (webdav, workingFile, remoteFile) => {
             return new Promise((resolve, reject) => {
@@ -213,8 +393,8 @@ async function compare() {
                             `Cannot download remote file ${remoteFile} from ${webdav.config.hostname}`
                         );
                     }
-                    console.log(data);
-                    console.log(typeof data);
+                    // console.log(data);
+                    console.log('Type of downloaded data:', typeof data);
                     if (typeof data === "object") {
                         data = JSON.stringify(data);
                         data = beautify(data, {
@@ -332,6 +512,8 @@ async function doWebdavAction(
     const workingWSFolder = vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri);
     console.log('workspaceFolders:', vscode.workspace.workspaceFolders);
     console.log('workingWSFolder:', workingWSFolder);
+    console.log('workingWSFolder.uri:', workingWSFolder.uri);
+    console.log('workingWSFolder.uri.fsPath:', workingWSFolder.uri.fsPath);
 
     // Read configuration
     const config = await getEndpointConfigForCurrentPath(workingDir);
@@ -358,14 +540,17 @@ async function doWebdavAction(
     const remoteFile = workingFile
         .replace(/\\/g, "/")
         .replace(
-            vscode.workspace.rootPath.replace(/\\/g, "/") + config.localRootPath,
+            // vscode.workspace.rootPath.replace(/\\/g, "/") + config.localRootPath,
+            workingWSFolder.uri.fsPath.replace(/\\/g, "/") + config.localRootPath,
             ""
         );
+    console.log('remoteFile:', remoteFile);
     const url = new URL(config.remoteEndpoint.url);
     config.remoteEndpoint.hostname = url.hostname;
     const credentialsKey = url.port
         ? url.hostname + ":" + url.port
         : url.hostname;
+    console.log('credentialsKey:', credentialsKey);
 
     try {
         // Get WebDAV credentials
@@ -404,6 +589,7 @@ async function doWebdavAction(
 }
 
 async function getEndpointConfigForCurrentPath(absoluteWorkingDir) {
+    // Finds the first matching config file, if any, in the current directory, nearest ancestor, or user's home directory.
     const configFile = findConfig("webdav.json", { cwd: absoluteWorkingDir });
 
     if (configFile == null) {
