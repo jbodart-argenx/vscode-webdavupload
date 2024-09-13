@@ -1,13 +1,13 @@
-# WebDAV support for Visual Studio Code
+# LSAF Rest API support for Visual Studio Code
 
-The WebDAV extension makes it easy to compare and upload files to a remote WebDAV server.
+The LSAF Rest API extension makes it easy to compare and upload files to a remote LSAF server, and is more secure and more powerful than the LSAF webdav interface.
 
 Commands added by this extension:
-- WebDAV: Compare ( `extension.webdavCompare` )
-- WebDAV: Upload ( `extension.webdavUpload` )
+- LSAF Rest API: Compare ( `extension.restApiCompare` )
+- LSAF Rest API: Upload ( `extension.restApiUpload` )
 
 ## Configuration
-To configure one or more remote endpoints, add a `webdav.json` to your project root. In this file you can define the endpoints based on one or more folders.
+To configure one or more remote endpoints, add a `webdav.json` to your project root (backard-compatible with extension [webdav-upload](https://github.com/jorith88/vscode-webdav)). In this file you can define the endpoints based on one or more folders.
 
 ### webdav.json Structure
 | Key  | Value |
