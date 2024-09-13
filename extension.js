@@ -4,8 +4,9 @@ const fs = require("fs");
 const findConfig = require("find-config");
 const path = require("path");
 const CredentialStore = require("./credentialstore/credentialstore.js");
+const { getMultiLineInput } = require('./getMultiLineInput');
 const { URL } = require("url");
-const webdavFs = require("webdav-fs");
+// const webdavFs = require("webdav-fs");
 const beautify = require("js-beautify");
 const fetch = require("node-fetch"); // Node.js equivalent to native Browser fetch 
                                      // need to stick to version 2.x (CommonJS)
@@ -35,14 +36,14 @@ const EMPTY_CREDENTIALS = {
 };
 
 function activate(context) {
-    const webdavUploadCommand = vscode.commands.registerCommand(
-        "extension.webdavUpload",
-        webdavUpload
-    );
-    const webdavCompareCommand = vscode.commands.registerCommand(
-        "extension.webdavCompare",
-        webdavCompare
-    );
+    // const webdavUploadCommand = vscode.commands.registerCommand(
+    //     "extension.webdavUpload",
+    //     webdavUpload
+    // );
+    // const webdavCompareCommand = vscode.commands.registerCommand(
+    //     "extension.webdavCompare",
+    //     webdavCompare
+    // );
     const restApiUploadCommand = vscode.commands.registerCommand(
         "extension.restApiUpload",
         restApiUpload
@@ -52,8 +53,8 @@ function activate(context) {
         restApiCompare
     );
 
-    context.subscriptions.push(webdavUploadCommand);
-    context.subscriptions.push(webdavCompareCommand);
+    // context.subscriptions.push(webdavUploadCommand);
+    // context.subscriptions.push(webdavCompareCommand);
     context.subscriptions.push(restApiUploadCommand);
     context.subscriptions.push(restApiCompareCommand);
 }
@@ -361,12 +362,33 @@ class RestApi {
         });
         // Check if user canceled the input
         if (userInput === undefined) {
-            vscode.window.showInformationMessage('Input was canceled');
+            console.log('Comment input was canceled');
+            // vscode.window.showInformationMessage('Comment input was canceled');
             this.comment = null;
         } else {
-            vscode.window.showInformationMessage(`You entered: ${userInput}`);
+            console.log(`Comment entered: ${userInput}`);
+            // vscode.window.showInformationMessage(`Comment entered: ${userInput}`);
             this.comment = userInput;
         }
+    }
+
+    async enterMultiLineComment(defaultValue) {
+
+    
+        vscode.window.showInformationMessage('Enter a (multi-line) comment and close the editor when done.');
+    
+        const userInput = await getMultiLineInput(defaultValue);
+
+        if (userInput.trim()) {
+            console.log(`Comment entered: ${userInput}`);
+            vscode.window.showInformationMessage(`Comment entered: ${userInput}`);
+            this.comment = userInput;
+        } else {
+            console.log('No comment provided.');
+            // vscode.window.showInformationMessage('No comment provided.');
+            this.comment = null;
+        }
+        console.log('Entered comment:\n',  this.comment);
     }
 
     async getFormData(useEditorContents = true) {
@@ -444,7 +466,8 @@ class RestApi {
         const filePath = this.remoteFile;
         console.log('filePath:', filePath);
         let apiRequest = `${urlPath}${filePath}?action=upload&version=MAJOR&createParents=true&overwrite=true`;
-        await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
+        // await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
+        await this.enterMultiLineComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}\n\n`);
         if (this.comment) {
             apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
         }
@@ -569,7 +592,8 @@ async function restApiCompare() {
     }
 }
 
-async function webdavUpload() /*: Promise<void>*/ {
+/*
+async function webdavUpload() {
     try {
         await doWebdavAction(async (webdav, workingFile, remoteFile) => {
             const editor = vscode.window.activeTextEditor;
@@ -579,8 +603,7 @@ async function webdavUpload() /*: Promise<void>*/ {
             }
 
             // Promisify the writeFile call
-            await new Promise(
-        /*<void>*/(resolve, reject) => {
+            await new Promise((resolve, reject) => {
                     webdav.writeFile(remoteFile, editor.document.getText(), (err) => {
                         if (err == null) {
                             const fileName = remoteFile.slice(
@@ -750,8 +773,7 @@ async function webdavCompare() {
 }
 
 async function doWebdavAction(
-    webdavAction /*: (webdav: any, workingFile: string, remoteFile: string) => Promise<void>*/
-) /*: Promise<void>*/ {
+    webdavAction ) {
     if (!vscode.window.activeTextEditor) {
         vscode.window.showErrorMessage("Cannot find an active text editor...");
         return;
@@ -837,6 +859,7 @@ async function doWebdavAction(
         );
     }
 }
+*/
 
 async function getEndpointConfigForCurrentPath(absoluteWorkingDir) {
     // Finds the first matching config file, if any, in the current directory, nearest ancestor, or user's home directory.
