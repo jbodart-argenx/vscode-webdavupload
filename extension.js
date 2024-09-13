@@ -1,6 +1,6 @@
 const vscode = require("vscode");
 const fs = require("fs");
-const os = require("os");
+// const os = require("os");
 const findConfig = require("find-config");
 const path = require("path");
 const CredentialStore = require("./credentialstore/credentialstore.js");
@@ -10,6 +10,11 @@ const beautify = require("js-beautify");
 const fetch = require("node-fetch"); // Node.js equivalent to native Browser fetch 
                                      // need to stick to version 2.x (CommonJS)
                                      // since version 3.x uses ESM 
+const FormData = require('form-data');
+const { Readable } = require('stream');
+// const { Blob } = require('buffer');
+
+// require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
 
 const tmp = require("tmp");
 tmp.setGracefulCleanup();   // remove all controlled temporary objects on process exit
@@ -73,6 +78,7 @@ class RestApi {
         this.tempFile = null;
         this.fileContents = null;
         this.config = null;
+        this.comment = null;
     }
 
     get apiUrl () {
@@ -132,6 +138,15 @@ class RestApi {
     async encryptPassword(password) {
         const url = `${this.apiUrl}/encrypt`;
         console.log('password:', password);
+        if (password === '') {
+            console.error('encryptPassword(): no password provided, aborting.');
+            this.encryptedPassword = null;
+            return;
+        }
+        if (password.toString().slice(0,4) === '{P21}') {
+            this.encryptedPassword = password; // already encrypted
+            return;
+        }
         const requestOptions = {
             method: "GET",
             headers: {
@@ -159,6 +174,9 @@ class RestApi {
             const { _username:username, _password:password}  = creds;
             this.username = username;
             await this.encryptPassword(password);
+            if (! this.encryptedPassword) {
+                throw new Error('No encrypted password, aborting logon.');
+            }
         }
         const url = `https://${this.host}/lsaf/api/logon`;
         const requestOptions = {
@@ -166,14 +184,34 @@ class RestApi {
             headers: {
                 "Authorization": "Basic " + btoa(this.username + ":" + this.encryptedPassword)
             },
-            redirect: "follow",
+            // redirect: "follow",
+            redirect: 'manual' // Handle redirection manually to prevent changing method to GET
         };
         try {
-            const response = await fetch(url, requestOptions);
+            let response = await fetch(url, requestOptions);
+            // Check if there's a redirect (3xx status code)
+            const maxRedirects = 20;
+            let redirects = 1;
+            while (response.status >= 300 && response.status < 400 && redirects < maxRedirects) {
+                const redirectUrl = response.headers.get('location');
+                if (redirectUrl) {
+                    console.log(`Response status: ${response.status} ${response.statusText}, Redirecting (${redirects}) to: ${redirectUrl}`);
+                    vscode.window.showInformationMessage(`Redirecting (${redirects}) to: ${redirectUrl}`);
+                    // Perform the request again at the new location
+                    response = await fetch(redirectUrl, requestOptions);
+                }
+                redirects+=1;
+            }
             if (response.ok) {
                 const authToken = response.headers.get("x-auth-token");
                 console.log("authToken", authToken, "response", response);
                 this.authToken = authToken;
+                // Store the password only if there is no WebDAV error and the credentials contain at least a user name
+                await storeCredentials(
+                    this.host, // credentialsKey
+                    this.username,
+                    this.encryptedPassword
+                );
             } else {
                 console.log(`${response.status} ${response.statusText}`);
                 const text = await response.text();
@@ -298,14 +336,226 @@ class RestApi {
         }
     }
 
+    async getEditorContents () {
+        // Get the active text editor
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showErrorMessage('No active editor');
+        return;
+        }
+        // Get the file content
+        const document = editor.document;
+        const fileContent = document.getText(); // Get all the content of the current file
+        const fileName = document.fileName;     // Get the file name
+        this.localFile = fileName;
+        this.fileContents = fileContent;
+    }
+
+    async enterComment (defaultValue) {
+        // Show an input box where the user can enter a comment
+        const userInput = await vscode.window.showInputBox({
+            placeHolder: 'Enter your comment here',
+            prompt: 'Please provide a comment',
+            value: `${defaultValue || ''}`,
+            ignoreFocusOut: true // Keeps the input box open even when focus is lost
+        });
+        // Check if user canceled the input
+        if (userInput === undefined) {
+            vscode.window.showInformationMessage('Input was canceled');
+            this.comment = null;
+        } else {
+            vscode.window.showInformationMessage(`You entered: ${userInput}`);
+            this.comment = userInput;
+        }
+    }
+
+    async getFormData(useEditorContents = true) {
+        let filename;
+        const filePath = this.remoteFile;
+        const formdata = new FormData();
+        if (useEditorContents) {
+            
+            // Create a Buffer from the string content and convert it to a Readable Stream
+            const bufferStream = new Readable();
+            bufferStream._read = () => {}; // No operation needed for the _read method
+            bufferStream.push(this.fileContents); // Push the content to the stream
+            bufferStream.push(null);    // Signal end of the stream
+
+            // filename = this.localFile;
+            filename = (this.localFile??'editorContents.txt')?.split(/[\\\/]/).slice(-1)[0];
+            console.log('filename:', filename);
+
+            // Append the file-like content to the FormData object with the key 'uploadFile'
+            formdata.append('uploadFile', bufferStream, { filename });
+            // formdata.append('uploadFile', new Blob([this.fileContents]), filename);    // fails because Blob is not a stream
+            console.log('formdata:', formdata);
+        } else {
+            filename = filePath.split(/[\\\/]/).slice(-1)[0];
+            console.log('filename:', filename);
+            /*
+            const data = await fs.promises.readFile(this.localFile);
+            const decoder = new TextDecoder('utf-8');
+            const fileContents = decoder.decode(data);
+            console.log('fileContents:', fileContents);
+            formdata.append('uploadFile', Buffer.from(fileContents), filename);    // works
+            */
+            // formdata.append('uploadFile', new Blob([fileContents]), filename);  // fails because Blob is not a stream
+            formdata.append('uploadFile', fs.createReadStream(this.localFile), filename);
+            console.log('formdata:', formdata);
+        }
+        return formdata;
+    }
+    
+    async uploadFile (param) {
+        console.log('param:', param);
+        let useEditorContents = false;
+        if (typeof param === 'boolean') {
+            useEditorContents = param;
+        } else if (param instanceof vscode.Uri) {
+            this.localFile = param.fsPath;
+        } else if (param === undefined) {
+            useEditorContents = true;
+        }
+        console.log('useEditorContents:', useEditorContents);
+        if (useEditorContents) {
+            await this.getEditorContents();
+            if (!this.fileContents == null) {
+                console.log(`Null or Undefined Editor Contents, aborting upload.`);
+                vscode.window.showWarningMessage(`Null or Undefined Editor Contents, aborting upload.`);
+                return;
+            }
+        } else {
+            if (! this.localFile || ! fs.existsSync(this.localFile)) {
+                console.log(`Local File "${this.localFile}" not found, aborting upload.`);
+                vscode.window.showWarningMessage(`Local File "${this.localFile}" not found, aborting upload.`);
+                return;
+            }
+        }
+        if (!this.authToken) {
+            await this.logon();
+        }
+        const apiUrl = `https://${this.host}/lsaf/api`;
+        const urlPath = new URL(this.config.remoteEndpoint.url).pathname
+            .replace(/\/lsaf\/webdav\/work\//, '/workspace/files/')
+            .replace(/\/lsaf\/webdav\/repo\//, '/repository/files/')
+            .replace(/\/$/, '')
+            ;
+        console.log('urlPath:', urlPath)
+        const filePath = this.remoteFile;
+        console.log('filePath:', filePath);
+        let apiRequest = `${urlPath}${filePath}?action=upload&version=MAJOR&createParents=true&overwrite=true`;
+        await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
+        if (this.comment) {
+            apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
+        }
+        apiRequest = `${apiRequest}&expand=item,status`;
+        console.log('useEditorContents:', useEditorContents);
+        let formdata;
+        let requestOptions;
+        formdata = await this.getFormData(useEditorContents);
+        requestOptions = {
+            method: "PUT",
+            body: formdata,
+            headers: { 
+                ...formdata.getHeaders(),
+                "X-Auth-Token": this.authToken
+            },
+            // redirect: "follow",
+            redirect: 'manual' // Handle redirection manually to prevent changing method to GET
+        };
+        // console.log(JSON.stringify(requestOptions));
+        try {
+            const fullUrl = apiUrl + apiRequest
+            console.log('fullUrl:', fullUrl);
+            let response = await fetch(apiUrl + apiRequest, requestOptions);
+            console.log('response.status:', response.status, response.statusText);
+            // Check if there's a redirect (3xx status code)
+            const maxRedirects = 20;
+            let redirects = 1;
+            while (response.status >= 300 && response.status < 400 && redirects < maxRedirects) {
+                const redirectUrl = response.headers.get('location');
+                if (redirectUrl) {
+                    console.log(`Response status: ${response.status} ${response.statusText}, Redirecting (${redirects}) to: ${redirectUrl}`);
+                    vscode.window.showInformationMessage(`Redirecting (${redirects}) to: ${redirectUrl}`);
+                    // re-create the formdata and file stream (they can only be used once!)
+                    formdata = await this.getFormData(useEditorContents);
+                    requestOptions = {
+                        method: "PUT",
+                        body: formdata,
+                        headers: { 
+                            ...formdata.getHeaders(),
+                            "X-Auth-Token": this.authToken
+                        },
+                        // redirect: "follow",
+                        redirect: 'manual' // Handle redirection manually to prevent changing method to GET
+                    };
+                    // Perform the PUT request again at the new location
+                    try {
+                        response = await fetch(redirectUrl, requestOptions);
+                    } catch (error) {
+                        console.log('error:', error);
+                    }
+                }
+                redirects+=1;
+            }
+            if (!response.ok) {
+                if (redirects >= maxRedirects) {
+                    vscode.window.showErrorMessage(`HTTP error uploading file, too many redirects! Status: ${response.status}  ${response.statusText}`);
+                    throw new Error(`HTTP error uploading file, too many redirects! Status: ${response.status}  ${response.statusText}`);
+                }
+                const responseText = await response.text();
+                console.log("responseText:", responseText);
+                vscode.window.showErrorMessage(`HTTP error uploading file! Status: ${response.status}  ${response.statusText}`);
+                throw new Error(`HTTP error uploading file! Status: ${response.status}  ${response.statusText}`);
+            }
+            let result;
+            let status;
+            let message;
+            const contentType = response.headers.get('content-type');
+            console.log('contentType:', contentType);
+            if (response.headers.get('content-type').match(/\bjson\b/)) {
+                const data = await response.json();
+                status = data.status;
+                result = beautify(JSON.stringify(data), {
+                    indent_size: 2,
+                    space_in_empty_paren: true,
+                });
+            } else {
+                result = await response.text();
+            }
+            if (status?.type === 'FAILURE') {
+                message = "File Upload failed: " + status?.message || result;
+            } else  if (status?.type === 'SUCCESS') {
+                message = "File Upload success: " + status?.message || result;
+            } else  {
+                console.log('result:', result);
+                message = `File "${filename}" upload result: ${result}`;
+            }
+            console.log(message);
+            vscode.window.showInformationMessage(message);
+        } catch (error) {
+            vscode.window.showErrorMessage("Error Uploading File:", error);
+            console.error("Error Uploading File:", error);
+            this.fileContents = null;
+        }
+    };
+
 }
 
 
 // 
 
-async function restApiUpload() {
+async function restApiUpload(param) {
+    if (param instanceof vscode.Uri) {
+        vscode.window.showInformationMessage(`Rest API: Uploading File URI: ${param.fsPath}`);
+    }
     const restApi = new RestApi();
-    restApi.getEndPointConfig();
+    try {
+        await restApi.getEndPointConfig();  // also sets remoteFile based on the contents of the active editor
+        await restApi.uploadFile(param);
+    } catch (err) {
+        console.log(err);
+    }
 }
 
 async function restApiCompare() {
