@@ -36,14 +36,6 @@ const EMPTY_CREDENTIALS = {
 };
 
 function activate(context) {
-    // const webdavUploadCommand = vscode.commands.registerCommand(
-    //     "extension.webdavUpload",
-    //     webdavUpload
-    // );
-    // const webdavCompareCommand = vscode.commands.registerCommand(
-    //     "extension.webdavCompare",
-    //     webdavCompare
-    // );
     const restApiUploadCommand = vscode.commands.registerCommand(
         "extension.restApiUpload",
         restApiUpload
@@ -53,8 +45,6 @@ function activate(context) {
         restApiCompare
     );
 
-    // context.subscriptions.push(webdavUploadCommand);
-    // context.subscriptions.push(webdavCompareCommand);
     context.subscriptions.push(restApiUploadCommand);
     context.subscriptions.push(restApiCompareCommand);
 }
@@ -94,12 +84,6 @@ class RestApi {
     
         this.localFile = vscode.window.activeTextEditor.document.uri.fsPath;
         const workingDir = this.localFile.slice(0, this.localFile.lastIndexOf(path.sep));
-        /*
-        console.log('workspaceFolders:', vscode.workspace.workspaceFolders);
-        console.log('workingWSFolder:', workingWSFolder);
-        console.log('workingWSFolder.uri:', workingWSFolder.uri);
-        console.log('workingWSFolder.uri.fsPath:', workingWSFolder.uri.fsPath);
-        */
     
         // Read configuration
         const config = await getEndpointConfigForCurrentPath(workingDir);
@@ -119,7 +103,6 @@ class RestApi {
         const remoteFile = this.localFile
             .replace(/\\/g, "/")
             .replace(
-                // vscode.workspace.rootPath.replace(/\\/g, "/") + config.localRootPath,
                 workingWSFolder.uri.fsPath.replace(/\\/g, "/") + config.localRootPath,
                 ""
             );
@@ -133,6 +116,15 @@ class RestApi {
             ? url.hostname + ":" + url.port
             : url.hostname;
         console.log('credentialsKey:', credentialsKey);
+        // Get credentials
+        const creds = await getCredentials(credentialsKey);
+        const { _username:username, _password:password}  = creds;
+        this.username = username;
+        if (password.toString().slice(0,4) === '{P21}') {
+            this.encryptedPassword = password; // already encrypted
+        } else {
+            await this.encryptPassword(password);
+        }
     }
 
 
@@ -592,275 +584,6 @@ async function restApiCompare() {
     }
 }
 
-/*
-async function webdavUpload() {
-    try {
-        await doWebdavAction(async (webdav, workingFile, remoteFile) => {
-            const editor = vscode.window.activeTextEditor;
-
-            if (!editor) {
-                throw new Error("No active text editor");
-            }
-
-            // Promisify the writeFile call
-            await new Promise((resolve, reject) => {
-                    webdav.writeFile(remoteFile, editor.document.getText(), (err) => {
-                        if (err == null) {
-                            const fileName = remoteFile.slice(
-                                remoteFile.lastIndexOf("/") + 1
-                            );
-                            vscode.window.showInformationMessage(
-                                `Uploaded: ${fileName} to ${webdav.config.hostname}`
-                            );
-                            resolve();
-                        } else {
-                            console.error(err);
-                            vscode.window.showErrorMessage(
-                                `Failed to upload file to remote host ${webdav.config.hostname}: ` +
-                                err.message
-                            );
-                            reject(err);
-                        }
-                    });
-                }
-            );
-        });
-    } catch (err) {
-        console.error("Error during upload:", err);
-        vscode.window.showErrorMessage("Error during upload:", err);
-    }
-}
-
-async function webdavCompare() {
-    try {
-        await doWebdavAction(async (webdav, workingFile, remoteFile) => {
-            return new Promise((resolve, reject) => {
-                // Write the remote file to a local temporary file
-                const extension = workingFile.slice(workingFile.lastIndexOf("."));
-                // Simple synchronous temporary file creation, the file will be closed and unlinked on process exit.
-                const tmpFile = tmp.fileSync({ postfix: extension });
-                console.log("tmpFile:", tmpFile);
-                console.log(
-                    "Reading remote file " +
-                    remoteFile +
-                    ` from ${webdav.config.hostname}...`
-                );
-                vscode.window.showInformationMessage(
-                    "Reading remote file " +
-                    remoteFile +
-                    ` from ${webdav.config.hostname}...`
-                );
-
-                webdav.readFile(remoteFile, "utf8", (error, data) => {
-                    if (error) {
-                        console.log(error);
-                        vscode.window.showErrorMessage(error);
-                        return reject(error); // Ensure execution stops
-                    }
-
-                    if (!data) {
-                        vscode.window.showErrorMessage(
-                            `Cannot download remote file ${remoteFile} from ${webdav.config.hostname}`
-                        );
-                        return reject(
-                            `Cannot download remote file ${remoteFile} from ${webdav.config.hostname}`
-                        );
-                    }
-                    // console.log(data);
-                    console.log('Type of downloaded data:', typeof data);
-                    if (typeof data === "object") {
-                        data = JSON.stringify(data);
-                        data = beautify(data, {
-                            indent_size: 2,
-                            space_in_empty_paren: true,
-                        });
-                    }
-                    // console.log(data);
-                    // console.log(typeof data);
-                    // Write contents to temp file
-                    fs.writeFile(tmpFile.name, data, async (err) => {
-                        if (err) {
-                            console.log(err);
-                            vscode.window.showErrorMessage(error);
-                            return reject(err); // Ensure execution stops
-                        }
-                        console.log(`Downloaded as ${tmpFile.name}`);
-                        // Set the file to read-only (cross-platform)
-                        try {
-                            await fs.promises.chmod(tmpFile.name, 0o444);
-                            // console.log(`File is now read-only: ${tmpFile.name}`);
-                        } catch(err) {
-                            console.error(`Failed to set file as read-only: ${err}`);
-                        }
-                        
-                        // Compare after successfully writing the file
-                        try {
-                            const fileName = remoteFile.slice(
-                                remoteFile.lastIndexOf("/") + 1
-                            );
-
-                            vscode.window.showInformationMessage(
-                                `Comparing: ${fileName} with ${webdav.config.hostname}`
-                            );
-                            await vscode.commands.executeCommand(
-                                "vscode.diff",
-                                vscode.Uri.file(path.normalize(tmpFile.name)),
-                                vscode.Uri.file(workingFile),
-                                fileName + ` (${webdav.config.hostname.split(".")[0]} Compare)`,
-                                {
-                                    preview: true, // false, // Open the diff in an additional tab instead of replacing the current one
-                                    selection: null, // Don't select any text in the compare
-                                }
-                            );
-
-                            // Listen for the diff editor closing
-                            const documentCloseListener = vscode.workspace.onDidCloseTextDocument(async (document) => {
-                                // console.log(`Closing document ${path.normalize(document.uri.fsPath)} ...`);
-                                console.log(`Closing document URI: ${document.uri.toString()}`);
-                                // console.log(`Closing document fsPath: ${document.uri.fsPath}`);
-                                // console.log(`Temp file is: ${path.normalize(tmpFile.name)}`);
-                                let normDocPath = path.normalize(document.uri.fsPath);
-                                let normTempFile = path.normalize(tmpFile.name);
-                                if ( // os.platform() === 'win32' &&
-                                    fs.existsSync(normTempFile.toLowerCase()) &&
-                                    fs.existsSync(normTempFile.toUpperCase())
-                                    ) 
-                                {
-                                    // console.log('FileSystem is case-insensitive!');
-                                    normDocPath = normDocPath.toLowerCase();
-                                    normTempFile = normTempFile.toLowerCase();
-                                }
-                                // console.log(`Same file: ${normDocPath === normTempFile}`);
-                                // If the document being closed is the temp file, delete it
-                                if (normDocPath === normTempFile) {
-                                    // Change permissions to writable (0o666 allows read and write for all users)
-                                    try {
-                                        // console.log(`Changing file permissions to writable: ${tmpFile.name}`);
-                                        await fs.promises.chmod(tmpFile.name, 0o666);
-                                        // console.log(`File permissions changed to writable: ${tmpFile.name}`);
-                                    } catch (error) {
-                                        console.error(`Error: ${error.message}`);
-                                    }
-                                    
-                                    // Delete the temporary file
-                                    tmpFile.removeCallback();
-                                    // fs.unlink(tmpFile.name, (err) => {
-                                    //     if (err) {
-                                    //         console.error(`Failed to delete temporary file: ${err.message}`);
-                                    //     } else {
-                                    //         console.log(`Temporary file deleted: ${tmpFile.name}`);
-                                    //     }
-                                    // });
-
-                                    // Clean up listener
-                                    documentCloseListener.dispose();
-                                }
-                            });
-                            // setTimeout(tmpFile.removeCallback, 3000); // Cleanup the temporary file after comparison
-                            resolve(undefined);
-                        } catch (error) {
-                            console.log(error);
-                            reject(error);
-                        }
-                    });
-                });
-            });
-        });
-    } catch (err) {
-        console.error(`Error during compare:`, err);
-        vscode.window.showErrorMessage("Error during compare:", err);
-    }
-}
-
-async function doWebdavAction(
-    webdavAction ) {
-    if (!vscode.window.activeTextEditor) {
-        vscode.window.showErrorMessage("Cannot find an active text editor...");
-        return;
-    }
-
-    const workingFile = vscode.window.activeTextEditor.document.uri.fsPath;
-    const workingDir = workingFile.slice(0, workingFile.lastIndexOf(path.sep));
-    const workingWSFolder = vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri);
-    console.log('workspaceFolders:', vscode.workspace.workspaceFolders);
-    console.log('workingWSFolder:', workingWSFolder);
-    console.log('workingWSFolder.uri:', workingWSFolder.uri);
-    console.log('workingWSFolder.uri.fsPath:', workingWSFolder.uri.fsPath);
-
-    // Read configuration
-    const config = await getEndpointConfigForCurrentPath(workingDir);
-
-    if (!config) {
-        vscode.window.showErrorMessage(
-            "Configuration not found for the current path."
-        );
-        return;
-    }
-
-    console.log("config:", config);
-
-    // Ignore SSL errors, needed for self-signed certificates
-    if (config.remoteEndpoint?.ignoreSSLErrors) {
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-    }
-
-    console.log('vscode.workspace.rootPath:', vscode.workspace.rootPath);
-    console.log('vscode.workspace.workspaceFolders:', vscode.workspace.workspaceFolders);
-    
-
-    // Initialize WebDAV and remote file path
-    const remoteFile = workingFile
-        .replace(/\\/g, "/")
-        .replace(
-            // vscode.workspace.rootPath.replace(/\\/g, "/") + config.localRootPath,
-            workingWSFolder.uri.fsPath.replace(/\\/g, "/") + config.localRootPath,
-            ""
-        );
-    console.log('remoteFile:', remoteFile);
-    const url = new URL(config.remoteEndpoint.url);
-    config.remoteEndpoint.hostname = url.hostname;
-    const credentialsKey = url.port
-        ? url.hostname + ":" + url.port
-        : url.hostname;
-    console.log('credentialsKey:', credentialsKey);
-
-    try {
-        // Get WebDAV credentials
-        const credentials = await getCredentials(credentialsKey);
-
-        if (!credentials) {
-            vscode.window.showWarningMessage("WebDAV login cancelled...");
-            vscode.window.showErrorMessage("WebDAV login cancelled...");
-            return;
-        }
-
-        const webdav = webdavFs(config.remoteEndpoint.url, {
-            username: credentials._username,
-            password: credentials._password,
-        });
-
-        webdav.config = config.remoteEndpoint;
-
-        // Perform WebDAV action
-        await webdavAction(webdav, workingFile, remoteFile);
-
-        // Store the password only if there is no WebDAV error and the credentials contain at least a user name
-        if (credentials.newCredentials && credentials._username) {
-            await storeCredentials(
-                credentialsKey,
-                credentials._username,
-                credentials._password
-            );
-        }
-    } catch (error) {
-        console.error("Error in WebDAV action:", error);
-        vscode.window.showErrorMessage(
-            "Error during WebDAV operation: " + error.message
-        );
-    }
-}
-*/
-
 async function getEndpointConfigForCurrentPath(absoluteWorkingDir) {
     // Finds the first matching config file, if any, in the current directory, nearest ancestor, or user's home directory.
     const configFile = findConfig("webdav.json", { cwd: absoluteWorkingDir });
@@ -871,22 +594,28 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir) {
         );
         return null;
     }
-    const webdavConfig = JSON.parse(fs.readFileSync(configFile));
+    let restApiConfig;
+    try {
+        restApiConfig = JSON.parse(fs.readFileSync(configFile));
+    } catch (error) {
+        vscode.window.showErrorMessage(`Error parsing config File: ${configFile}, ${error.message}`)
+    }
+    
     let allEndpointsConfig;
-    if (Array.isArray(webdavConfig)) {
-        const configChoices = webdavConfig.map((config, index) =>
+    if (Array.isArray(restApiConfig)) {
+        const configChoices = restApiConfig.map((config, index) =>
             config.label ? ": " + config.label : "Config " + (index + 1).toString()
         );
         const selectedConfig = await vscode.window.showQuickPick(configChoices, {
-            placeHolder: "Choose an action to execute",
+            placeHolder: "Choose a remote location",
             canPickMany: false,
         });
         allEndpointsConfig =
-            webdavConfig[
+            restApiConfig[
             configChoices.findIndex((config) => config === selectedConfig)
             ];
     } else {
-        allEndpointsConfig = webdavConfig;
+        allEndpointsConfig = restApiConfig;
     }
     console.log("allEndpointsConfig:", allEndpointsConfig);
     console.log("configFile:", configFile);
