@@ -1,9 +1,9 @@
 {
-    "name": "webdav",
-    "displayName": "WebDAV Upload",
-    "description": "Uploads local files to a remote host using WebDAV",
-    "version": "0.0.13",
-    "publisher": "jorithvdheuvel",
+    "name": "lsaf-rest-api",
+    "displayName": "LSAF Rest API Upload",
+    "description": "Uploads local files to a remote LSAF host using Rest API",
+    "version": "0.0.1",
+    "publisher": "jbodart-argenx",
     "engines": {
         "vscode": "^1.16.0"
     },
@@ -18,24 +18,14 @@
     "contributes": {
         "commands": [
             {
-                "command": "extension.webdavUpload",
-                "title": "Upload to remote WebDAV file",
-                "category": "WebDAV"
-            },
-            {
-                "command": "extension.webdavCompare",
-                "title": "Compare with remote WebDAV file",
-                "category": "WebDAV"
-            },
-            {
                 "command": "extension.restApiUpload",
                 "title": "Upload to LSAF Rest API",
-                "category": "WebDAV"
+                "category": "LSAF"
             },
             {
                 "command": "extension.restApiCompare",
                 "title": "Compare with LSAF Rest API file",
-                "category": "WebDAV"
+                "category": "LSAF"
             }
         ],
         "menus": {
@@ -43,20 +33,10 @@
                 {
                     "command": "extension.restApiUpload",
                     "when": "resourceLangId",
-                    "group": "webdav"
+                    "group": "LSAF"
                     }
             ],
             "editor/context": [
-                {
-                    "when": "editorTextFocus",
-                    "command": "extension.webdavCompare",
-                    "group": "webdav"
-                },
-                {
-                    "when": "editorTextFocus",
-                    "command": "extension.webdavUpload",
-                    "group": "webdav"
-                },
                 {
                     "when": "editorTextFocus",
                     "command": "extension.restApiCompare",
@@ -73,13 +53,13 @@
     "scripts": {
         "test": "node ./out/test/runTest.js"
     },
-    "homepage": "https://github.com/jorith88/vscode-webdav/blob/master/README.md",
+    "homepage": "https://github.com/jbodart-argenx/vscode-webdav/blob/master/README.md",
     "bugs": {
-        "url": "https://github.com/jorith88/vscode-webdav/issues"
+        "url": "https://github.com/jbodart-argenx/vscode-webdav/issues"
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/jorith88/vscode-webdav.git"
+        "url": "https://github.com/jbodart-argenx/vscode-webdav.git"
     },
     "resolutions": {
         "**/event-stream": "3.3.4"
