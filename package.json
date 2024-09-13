@@ -11,7 +11,8 @@
         "Other"
     ],
     "activationEvents": [
-        "*"
+        "onStartupFinished",
+        "onEditSession:file"
     ],
     "main": "./extension",
     "contributes": {
@@ -25,9 +26,10 @@
                 "command": "extension.webdavCompare",
                 "title": "Compare with remote WebDAV file",
                 "category": "WebDAV"
-            },{
+            },
+            {
                 "command": "extension.restApiUpload",
-                "title": "Upload to LSAF Rest API file",
+                "title": "Upload to LSAF Rest API",
                 "category": "WebDAV"
             },
             {
@@ -37,6 +39,13 @@
             }
         ],
         "menus": {
+            "explorer/context": [
+                {
+                    "command": "extension.restApiUpload",
+                    "when": "resourceLangId",
+                    "group": "webdav"
+                    }
+            ],
             "editor/context": [
                 {
                     "when": "editorTextFocus",
@@ -88,6 +97,7 @@
     "dependencies": {
         "event-stream": "3.3.4",
         "find-config": "^1.0.0",
+        "form-data": "^4.0.0",
         "js-beautify": "^1.15.1",
         "node-fetch": "^2.7.0",
         "path": "^0.12.7",
