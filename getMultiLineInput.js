@@ -36,8 +36,10 @@ async function getMultiLineInput(defaultValue = '') {
 }
 
 // Helper function to get the HTML content for the webview
-function getWebviewContent(defaultValue) {
-
+function getWebviewContent(defaultValue, title="File Upload Comment", header=undefined) {
+   if (! header) header = `Enter ${title} below:`;
+   const escapedTitle = title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+   const escapedHeader = header.replace(/</g, '&lt;').replace(/>/g, '&gt;');
    const escapedValue = defaultValue.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
    return `
@@ -46,7 +48,7 @@ function getWebviewContent(defaultValue) {
       <head>
          <meta charset="UTF-8">
          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-         <title>Multi-Line Input</title>
+         <title>${escapedTitle}</title>
          <style>
             body {
                display: flex;
@@ -54,10 +56,12 @@ function getWebviewContent(defaultValue) {
                margin: 0;
                height: 100vh;
                box-sizing: border-box;
+               font-family: sans-serif;
             }
             textarea {
                flex: 1;
                box-sizing: border-box;
+               font-family: sans-serif;
             }
             .controls {
                margin-top: 10px;
@@ -65,7 +69,7 @@ function getWebviewContent(defaultValue) {
          </style>
       </head>
       <body>
-         <h2>Enter multi-line text below:</h2>
+         <h2>${escapedHeader}</h2>
          <textarea id="inputText">${escapedValue}</textarea>
          <div class="controls">
             <button onclick="submitText()">Submit</button>
