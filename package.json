@@ -19,12 +19,12 @@
         "commands": [
             {
                 "command": "extension.restApiUpload",
-                "title": "Upload to LSAF Rest API",
+                "title": "LSAF Rest API: Upload",
                 "category": "LSAF"
             },
             {
                 "command": "extension.restApiCompare",
-                "title": "Compare with LSAF Rest API file",
+                "title": "LSAF Rest API: Compare",
                 "category": "LSAF"
             }
         ],
@@ -34,18 +34,33 @@
                     "command": "extension.restApiUpload",
                     "when": "resourceLangId",
                     "group": "LSAF"
-                    }
+                },
+                {
+                    "command": "extension.restApiCompare",
+                    "when": "resourceLangId",
+                    "group": "LSAF"
+                }
             ],
             "editor/context": [
                 {
                     "when": "editorTextFocus",
                     "command": "extension.restApiCompare",
-                    "group": "webdav"
+                    "group": "LSAF"
                 },
                 {
                     "when": "editorTextFocus",
                     "command": "extension.restApiUpload",
-                    "group": "webdav"
+                    "group": "LSAF"
+                }
+            ],
+            "editor/title/context": [
+                {
+                    "command": "extension.restApiCompare",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "extension.restApiUpload",
+                    "group": "LSAF"
                 }
             ]
         }
@@ -53,13 +68,13 @@
     "scripts": {
         "test": "node ./out/test/runTest.js"
     },
-    "homepage": "https://github.com/jbodart-argenx/vscode-webdav/blob/master/README.md",
+    "homepage": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/blob/master/README.md",
     "bugs": {
-        "url": "https://github.com/jbodart-argenx/vscode-webdav/issues"
+        "url": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/issues"
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/jbodart-argenx/vscode-webdav.git"
+        "url": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload"
     },
     "resolutions": {
         "**/event-stream": "3.3.4"
