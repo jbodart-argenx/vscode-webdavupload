@@ -26,6 +26,16 @@
                 "command": "extension.restApiCompare",
                 "title": "LSAF Rest API: Compare",
                 "category": "LSAF"
+            },
+            {
+                "command": "extension.restApiProperties",
+                "title": "LSAF Rest API: Get Properties",
+                "category": "LSAF"
+            },
+            {
+                "command": "extension.restApiVersions",
+                "title": "LSAF Rest API: Get Versions",
+                "category": "LSAF"
             }
         ],
         "menus": {
@@ -37,6 +47,16 @@
                 },
                 {
                     "command": "extension.restApiCompare",
+                    "when": "resourceLangId",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "extension.restApiProperties",
+                    "when": "resourceLangId",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "extension.restApiVersions",
                     "when": "resourceLangId",
                     "group": "LSAF"
                 }
@@ -51,6 +71,16 @@
                     "when": "editorTextFocus",
                     "command": "extension.restApiUpload",
                     "group": "LSAF"
+                },
+                {
+                    "when": "editorTextFocus",
+                    "command": "extension.restApiProperties",
+                    "group": "LSAF"
+                },
+                {
+                    "when": "editorTextFocus",
+                    "command": "extension.restApiVersions",
+                    "group": "LSAF"
                 }
             ],
             "editor/title/context": [
@@ -60,6 +90,14 @@
                 },
                 {
                     "command": "extension.restApiUpload",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "extension.restApiProperties",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "extension.restApiVersions",
                     "group": "LSAF"
                 }
             ]
@@ -99,7 +137,6 @@
         "q": "^1.5.1",
         "readable-stream": "^3.3.0",
         "tmp": "0.1.0",
-        "underscore": "^1.13.1",
-        "webdav-fs": "^3.0.0"
+        "underscore": "^1.13.1"
     }
 }
