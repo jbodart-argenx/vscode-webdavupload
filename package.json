@@ -1,8 +1,8 @@
 {
     "name": "lsaf-rest-api",
     "displayName": "LSAF Rest API Upload",
-    "description": "Uploads local files to a remote LSAF host using Rest API",
-    "version": "0.0.1",
+    "description": "Compares & uploads local files to a remote LSAF host using Rest API",
+    "version": "0.0.2",
     "publisher": "jbodart-argenx",
     "engines": {
         "vscode": "^1.16.0"
@@ -14,7 +14,7 @@
         "onStartupFinished",
         "onEditSession:file"
     ],
-    "main": "./extension",
+    "main": "./dist/extension.js",
     "contributes": {
         "commands": [
             {
@@ -103,8 +103,15 @@
         }
     },
     "scripts": {
-        "test": "node ./out/test/runTest.js"
-    },
+        "compile": "npm run check-types && node esbuild.js",
+        "check-types": "tsc --noEmit",
+        "watch": "npm-run-all -p watch:*",
+        "watch:esbuild": "node esbuild.js --watch",
+        "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+        "vscode:prepublish": "npm run package",
+        "package": "npm run check-types && node esbuild.js --production"
+    }
+    ,
     "homepage": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/blob/master/README.md",
     "bugs": {
         "url": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/issues"
@@ -120,6 +127,7 @@
         "@types/mocha": "^5.2.6",
         "@types/node": "^11.13.4",
         "@vscode/test-electron": "^1.6.2",
+        "esbuild": "^0.23.1",
         "eslint": "^8.2.0",
         "ts-loader": "^9.2.6",
         "typescript": "^3.4.3",
