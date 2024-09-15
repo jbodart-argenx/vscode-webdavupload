@@ -42,22 +42,21 @@
             "explorer/context": [
                 {
                     "command": "extension.restApiUpload",
-                    "when": "resourceLangId",
+                    "when": "!explorerResourceIsFolder",
                     "group": "LSAF"
                 },
                 {
                     "command": "extension.restApiCompare",
-                    "when": "resourceLangId",
+                    "when": "!explorerResourceIsFolder",
                     "group": "LSAF"
                 },
                 {
                     "command": "extension.restApiProperties",
-                    "when": "resourceLangId",
                     "group": "LSAF"
                 },
                 {
                     "command": "extension.restApiVersions",
-                    "when": "resourceLangId",
+                    "when": "!explorerResourceIsFolder",
                     "group": "LSAF"
                 }
             ],
