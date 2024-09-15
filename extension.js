@@ -358,22 +358,55 @@ class RestApi {
         }
     };
 
+    async getFileStat(param) {
+        let fileStat;
+        if (param instanceof vscode.Uri) {
+            // param is a Uri
+            fileStat = await vscode.workspace.fs.stat(param);
+        } else if (typeof param === 'string') {
+            // assuming param is a file
+            fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(param));
+        }
+        return fileStat;
+    }
 
     async getRemoteFileProperties (param) {
         if (param instanceof vscode.Uri) {
             this.localFile = param.fsPath;
+        } else {
+            this.localFile = vscode.window.activeTextEditor.document.uri.fsPath;
+        }
+        if (! this.localFile) {
+            console.error('Cannot get Remote File Properties of a non-specified file:', this.localFile);
+            vscode.window.showErrorMessage('Cannot get Remote File Properties of a non-specified file:', this.localFile);
+            return;
         }
         if (!this.authToken) {
             await this.logon();
         }
         const apiUrl = `https://${this.host}/lsaf/api`;
+        const fileStat = await this.getFileStat(this.localFile);
+        console.log('Local File:', this.localFile, 'fileStat:', fileStat);
+        let itemType;
+        if (fileStat.type === vscode.FileType.File) {
+            itemType = 'file';
+        } else if (fileStat.type === vscode.FileType.Directory) {
+            if (this.config.remoteEndpoint.url.match(/\/lsaf\/webdav\/repo\//)) {
+                itemType = 'container';
+            } else  {
+                itemType = 'folder';
+            }
+        } else {
+            return vscode.window.showWarningMessage(`Get Remote File Properties: ${this.localFile} is neither a file nor a folder!`);
+        }
         const urlPath = new URL(this.config.remoteEndpoint.url).pathname
-            .replace(/\/lsaf\/webdav\/work\//, '/workspace/files/')
-            .replace(/\/lsaf\/webdav\/repo\//, '/repository/files/')
+            .replace(/\/lsaf\/webdav\/work\//, `/workspace/${itemType}s/`)
+            .replace(/\/lsaf\/webdav\/repo\//, `/repository/${itemType}s/`)
             .replace(/\/$/, '')
             ;
         console.log('urlPath:', urlPath)
         const filePath = this.remoteFile;
+        // console.log('filePath:', filePath)
         const apiRequest = `${urlPath}${filePath}?component=properties`;
         const requestOptions = {
             method: "GET",
@@ -661,7 +694,7 @@ class RestApi {
         if (typeof param === 'boolean') {
             useEditorContents = param;
         } else if (param instanceof vscode.Uri) {
-            const fileStat = await vscode.workspace.fs.stat(param);
+            const fileStat = await this.getFileStat(param);
             if (fileStat.type === vscode.FileType.File) {
                 this.localFile = param.fsPath;
             }else if (fileStat.type === vscode.FileType.Directory) {
@@ -851,7 +884,7 @@ async function restApiProperties(param) {
         if (!restApi.config) {
             return;
         }
-        await restApi.getRemoteFileProperties();
+        await restApi.getRemoteFileProperties(param);
         let properties = restApi.fileProperties;
         if (typeof properties === 'object') {
             properties = beautify(JSON.stringify(properties), {
