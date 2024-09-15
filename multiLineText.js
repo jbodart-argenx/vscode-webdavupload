@@ -1,7 +1,7 @@
 const vscode = require("vscode");
 
 // This is the async function that opens a webview and collects multi-line input from the user
-async function getMultiLineInput(defaultValue = '') {
+async function getMultiLineText(defaultValue = '') {
    return new Promise((resolve, reject) => {
       // Create and show a new webview panel
       const panel = vscode.window.createWebviewPanel(
@@ -35,12 +35,52 @@ async function getMultiLineInput(defaultValue = '') {
    });
 }
 
+
+// This is the async function that opens a webview and collects multi-line input from the user
+async function showMultiLineText(textValue = '', title="Text Content", header="", buttonLabel="Dismiss") {
+   const editable=false;
+   return new Promise((resolve, reject) => {
+      // Create and show a new webview panel
+      const panel = vscode.window.createWebviewPanel(
+         "multiLineText", // Identifier for the panel
+         title, // Panel title
+         vscode.ViewColumn.One, // Display in editor column one
+         {
+         enableScripts: true, // Enable JavaScript in the webview
+         }
+      );
+
+      // Set the content of the webview
+      panel.webview.html = getWebviewContent(textValue, title, header, buttonLabel, editable);
+      
+
+      // Handle messages from the webview
+      panel.webview.onDidReceiveMessage(
+         (message) => {
+         if (message.command === "submitText") {
+            resolve(message.text); // Resolve the promise with the submitted text
+            panel.dispose(); // Close the webview panel
+         }
+         },
+         undefined,
+         undefined
+      );
+
+      // If the panel is closed without submitting, reject the promise
+      panel.onDidDispose(() => {
+         reject("Dismissed");
+      });
+   });
+}
+
 // Helper function to get the HTML content for the webview
-function getWebviewContent(defaultValue, title="File Upload Comment", header=undefined) {
+function getWebviewContent(defaultValue, title="File Upload Comment", header=undefined, buttonLabel="Submit", editable=true) {
    if (! header) header = `Enter ${title} below:`;
    const escapedTitle = title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
    const escapedHeader = header.replace(/</g, '&lt;').replace(/>/g, '&gt;');
    const escapedValue = defaultValue.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+   const escapedButtonLabel = buttonLabel.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+   const readonly = editable ? "" : "readonly";
 
    return `
    <!DOCTYPE html>
@@ -70,9 +110,9 @@ function getWebviewContent(defaultValue, title="File Upload Comment", header=und
       </head>
       <body>
          <h2>${escapedHeader}</h2>
-         <textarea id="inputText">${escapedValue}</textarea>
+         <textarea id="inputText" ${readonly}>${escapedValue}</textarea>
          <div class="controls">
-            <button onclick="submitText()">Submit</button>
+            <button onclick="submitText()">${escapedButtonLabel}</button>
          </div>
 
          <script>
@@ -93,5 +133,6 @@ function getWebviewContent(defaultValue, title="File Upload Comment", header=und
 
 // Export the function so it can be imported in other files
 module.exports = {
-   getMultiLineInput,
+   getMultiLineText,
+   showMultiLineText
 };
