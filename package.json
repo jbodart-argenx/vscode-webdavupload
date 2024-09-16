@@ -36,6 +36,11 @@
                 "command": "extension.restApiVersions",
                 "title": "LSAF Rest API: Get Versions",
                 "category": "LSAF"
+            },
+            {
+                "command": "extension.restApiFolderContents",
+                "title": "LSAF Rest API: Get Folder Contents",
+                "category": "LSAF"
             }
         ],
         "menus": {
@@ -57,6 +62,11 @@
                 {
                     "command": "extension.restApiVersions",
                     "when": "!explorerResourceIsFolder",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "extension.restApiFolderContents",
+                    "when": "explorerResourceIsFolder",
                     "group": "LSAF"
                 }
             ],
