@@ -56,11 +56,16 @@ function activate(context) {
         "extension.restApiVersions",
         restApiVersions
     );
+    const restApiFolderContentsCommand = vscode.commands.registerCommand(
+        "extension.restApiFolderContents",
+        restApiFolderContents
+    );
 
     context.subscriptions.push(restApiUploadCommand);
     context.subscriptions.push(restApiCompareCommand);
     context.subscriptions.push(restApiPropertiesCommand);
     context.subscriptions.push(restApiVersionsCommand);
+    context.subscriptions.push(restApiFolderContentsCommand);
 }
 
 exports.activate = activate;
@@ -450,6 +455,89 @@ class RestApi {
             console.error("Error fetching Remote File Properties:", error);
             vscode.window.showErrorMessage("Error fetching Remote File Properties:", error.message);
             this.fileProperties = null;
+        }
+    };
+
+    async getRemoteFolderContents (param) {
+        if (param instanceof vscode.Uri) {
+            this.localFile = param.fsPath;
+        } else {
+            this.localFile = vscode.window.activeTextEditor.document.uri.fsPath;
+        }
+        if (! this.localFile) {
+            console.error('Cannot get Remote Folder Contents of a non-specified path:', this.localFile);
+            vscode.window.showErrorMessage('Cannot get Remote Folder Contents of a non-specified path:', this.localFile);
+            return;
+        }
+        if (!this.authToken) {
+            await this.logon();
+        }
+        const apiUrl = `https://${this.host}/lsaf/api`;
+        const fileStat = await this.getFileStat(this.localFile);
+        console.log('Local File:', this.localFile, 'fileStat:', fileStat);
+        let itemType;
+        if (fileStat.type === vscode.FileType.File) {
+            return vscode.window.showWarningMessage(`Get Remote Folder Contents: ${this.localFile} is not a folder!`);
+        } else if (fileStat.type === vscode.FileType.Directory) {
+            if (this.config.remoteEndpoint.url.match(/\/lsaf\/webdav\/repo\//)) {
+                itemType = 'container';
+            } else  {
+                itemType = 'folder';
+            }
+        } else {
+            return vscode.window.showWarningMessage(`Get Remote Folder Contents: ${this.localFile} is neither a file nor a folder!`);
+        }
+        const urlPath = new URL(this.config.remoteEndpoint.url).pathname
+            .replace(/\/lsaf\/webdav\/work\//, `/workspace/${itemType}s/`)
+            .replace(/\/lsaf\/webdav\/repo\//, `/repository/${itemType}s/`)
+            .replace(/\/$/, '')
+            ;
+        console.log('urlPath:', urlPath)
+        const filePath = this.remoteFile;
+        // console.log('filePath:', filePath)
+        const apiRequest = `${urlPath}${filePath}?component=children`;
+        const requestOptions = {
+            method: "GET",
+            headers: { "X-Auth-Token": this.authToken },
+            redirect: "follow",
+        };
+        try {
+            const response = await fetch(apiUrl + apiRequest, requestOptions);
+            const contentType = response.headers.get('content-type');
+            console.log('contentType:', contentType);
+            let result = null;
+            let data  = null;
+            if (contentType.match(/\bjson\b/)) {
+                data = await response.json();
+                if (data.message) {
+                    result = data.details||data.message;
+                    if (data.remediation && data.remediation !== "No remediation message is available.") {
+                        result =`${result.trim()}, remediation: ${data.remediation}`;
+                    }
+                } else {
+                    result = beautify(JSON.stringify(data), {
+                        indent_size: 2,
+                        space_in_empty_paren: true,
+                    });
+                }
+            } else {
+                result = await response.text();
+                result = `${response.status}, ${response.statusText}: Result: ${result}`;
+            }
+            if (!response.ok) {
+                throw new Error(`HTTP error! ${result}`);
+            } else {
+                if (data) {
+                    this.folderContents = data;
+                } else {
+                    this.folderContents = result;    
+                }            
+            }
+
+        } catch (error) {
+            console.error("Error fetching Remote Folder Contents:", error);
+            vscode.window.showErrorMessage("Error fetching Remote Folder Contents:", error.message);
+            this.folderContents = null;
         }
     };
 
@@ -921,6 +1009,32 @@ async function restApiVersions(param) {
         console.log("File versions:\n", versions);
         // vscode.window.showInformationMessage(versions);
         showMultiLineText(versions, "Remote File Versions", `${restApi.config.label} file versions: ${restApi.remoteFile}`);
+    } catch (err) {
+        console.log(err);
+    }
+}
+
+
+async function restApiFolderContents(param) {
+    const restApi = new RestApi();
+    try {
+        await restApi.getEndPointConfig(param); // based on the passed Uri (if defined)
+                                                // otherwise based on the path of the local file open in the active editor
+                                                // also sets remoteFile
+        if (!restApi.config) {
+            return;
+        }
+        await restApi.getRemoteFolderContents(param);
+        let folderContents = restApi.folderContents;
+        if (typeof folderContents === 'object') {
+            folderContents = beautify(JSON.stringify(folderContents), {
+                indent_size: 2,
+                space_in_empty_paren: true,
+            });
+        }
+        console.log("Folder contents:\n", folderContents);
+        // vscode.window.showInformationMessage(folderContents);
+        showMultiLineText(folderContents, "Remote Folder Contents", `${restApi.config.label} folder contents: ${restApi.remoteFile}`);
     } catch (err) {
         console.log(err);
     }
