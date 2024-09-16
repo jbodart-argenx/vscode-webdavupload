@@ -1,20 +1,36 @@
-// A launch configuration that launches the extension inside a new window
 {
-    "version": "0.1.0",
+    "version": "0.2.0",  // Updated version to 0.2.0 for consistency with latest schema
     "configurations": [
         {
             "name": "Launch Extension",
-            "type": "extensionHost",
+            "type": "extensionHost",   // Keep this as "extensionHost"
             "request": "launch",
             "runtimeExecutable": "${execPath}",
-            "args": ["--extensionDevelopmentPath=${workspaceRoot}" ]
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}",  // Path to your extension
+                "--disable-extensions"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"  // Point to the bundled JS files
+            ],
+            "preLaunchTask": "npm: compile", // "npm: build",  // Build before launching tests
+            "sourceMaps": true,  // Enable source maps for debugging
+            //"trace": "verbose"   // Optional: useful for debugging if needed
         },
         {
             "name": "Launch Tests",
-            "type": "extensionHost",
+            "type": "extensionHost",  // Keep this as "extensionHost"
             "request": "launch",
             "runtimeExecutable": "${execPath}",
-            "args": ["--extensionDevelopmentPath=${workspaceRoot}", "--extensionTestsPath=${workspaceRoot}/test" ]
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "--extensionTestsPath=${workspaceFolder}/dist/test"  // Adjust test path if necessary
+            ],
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"  // Ensure this points to your test output files
+            ],
+            "preLaunchTask": "npm: compile", // "npm: build",  // Build before launching tests
+            "sourceMaps": true
         }
     ]
 }
