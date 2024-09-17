@@ -126,6 +126,7 @@ class RestApi {
         this.localFileStat = null;
         this.tempFile = null;
         this.fileContents = null;
+        this.fileVersion = null;
         this.config = null;
         this.comment = null;
         this.fileProperties = null;
@@ -136,7 +137,7 @@ class RestApi {
         return this.host ? `https://${this.host}/lsaf/api` : null;
     }
 
-    async getEndPointConfig(param) {
+    async getEndPointConfig(param, onlyRepo = false) {
         if (param instanceof vscode.Uri) {
             console.log('(getEndPointConfig) param:', param);
             this.localFile = param.fsPath;
@@ -158,7 +159,7 @@ class RestApi {
         console.log('(getEndPointConfig) workingDir:', workingDir);
     
         // Read configuration
-        const config = await getEndpointConfigForCurrentPath(workingDir);
+        const config = await getEndpointConfigForCurrentPath(workingDir, onlyRepo);
     
         if (!config) {
             vscode.window.showErrorMessage(
@@ -336,9 +337,7 @@ class RestApi {
         if (param instanceof vscode.Uri) {
             this.localFile = param.fsPath;
         }
-        if (!this.authToken) {
-            await this.logon();
-        }
+        await this.logon();  // check that authToken is still valid
         const apiUrl = `https://${this.host}/lsaf/api`;
         const urlPath = new URL(this.config.remoteEndpoint.url).pathname
             .replace(/\/lsaf\/webdav\/work\//, '/workspace/files/')
@@ -347,7 +346,37 @@ class RestApi {
             ;
         console.log('urlPath:', urlPath)
         const filePath = this.remoteFile;
-        const apiRequest = `${urlPath}${filePath}?component=contents`;
+        let selectedVersion = null;
+        let selectedVersions = null;
+        let compareVersion = null;
+        if (/\/repository\/files\//.test(urlPath)) {
+            await this.getRemoteFileVersions();
+            let versions = this.fileVersions;
+            const MAX_ITEMS = 30;
+            const PICK_MULTIPLE = true;
+            if (Array.isArray(versions.items) && versions.items.length > 1) {
+                const allVersions = versions.items.slice(0, MAX_ITEMS).map(item => 
+                    {
+                        return ({
+                            label: `${item.version}`, 
+                            description: `size: ${item.size}, created: ${item.created} by ${item.createdBy}`, 
+                            detail: item.comment
+                        })
+                    });
+                selectedVersions = await vscode.window.showQuickPick(allVersions, 
+                    {canPickMany: PICK_MULTIPLE, title: 'Select a version', placeHolder: allVersions[0].label, ignoreFocusOut: true,});
+                if (!!PICK_MULTIPLE) {
+                    selectedVersion = selectedVersions[0];
+                    compareVersion = selectedVersions[1];
+                    console.log('compareVersion:', compareVersion);}
+                } else {
+                    selectedVersion = selectedVersions;
+                }
+            } else {
+                selectedVersion = null;
+            }
+
+        const apiRequest = `${urlPath}${filePath}?component=contents` + (selectedVersion?.label ? `&version=${selectedVersion.label}` : '');
         const requestOptions = {
             method: "GET",
             headers: { "X-Auth-Token": this.authToken },
@@ -390,6 +419,7 @@ class RestApi {
             const responseText = await response.text();
             console.log("responseText", responseText);
             this.fileContents = responseText;
+            this.fileVersion = selectedVersion?.label || null;
         } catch (error) {
             console.error("Error fetching Remote File Contents:", error);
             vscode.window.showErrorMessage("Error fetching Remote File Contents:", error.message);
@@ -420,9 +450,7 @@ class RestApi {
             vscode.window.showErrorMessage('Cannot get Remote File Properties of a non-specified file:', this.localFile);
             return;
         }
-        if (!this.authToken) {
-            await this.logon();
-        }
+        await this.logon();
         const apiUrl = `https://${this.host}/lsaf/api`;
         const fileStat = await this.getFileStat(this.localFile);
         console.log('Local File:', this.localFile, 'fileStat:', fileStat);
@@ -503,9 +531,7 @@ class RestApi {
             vscode.window.showErrorMessage('Cannot get Remote Folder Contents of a non-specified path:', this.localFile);
             return;
         }
-        if (!this.authToken) {
-            await this.logon();
-        }
+        await this.logon();
         const apiUrl = `https://${this.host}/lsaf/api`;
         const fileStat = await this.getFileStat(this.localFile);
         console.log('Local File:', this.localFile, 'fileStat:', fileStat);
@@ -529,7 +555,7 @@ class RestApi {
         console.log('urlPath:', urlPath)
         const filePath = this.remoteFile;
         // console.log('filePath:', filePath)
-        const apiRequest = `${urlPath}${filePath}?component=children&expand=item`;
+        const apiRequest = `${urlPath}${filePath}?component=children&expand=item&limit=10000`;
         const requestOptions = {
             method: "GET",
             headers: { "X-Auth-Token": this.authToken },
@@ -580,9 +606,7 @@ class RestApi {
         if (param instanceof vscode.Uri) {
             this.localFile = param.fsPath;
         }
-        if (!this.authToken) {
-            await this.logon();
-        }
+        await this.logon();
         const apiUrl = `https://${this.host}/lsaf/api`;
         const urlPath = new URL(this.config.remoteEndpoint.url).pathname
             .replace(/\/lsaf\/webdav\/work\//, '/workspace/files/')
@@ -666,14 +690,15 @@ class RestApi {
                 const fileName = this.remoteFile.slice(
                     this.remoteFile.lastIndexOf("/") + 1
                 );
+                const versionLabel = this.fileVersion ? ` (v${this.fileVersion})` : '';
                 vscode.window.showInformationMessage(
-                    `Comparing: ${fileName} with ${this.config.label || this.host.split(".")[0]} remote file`
+                    `Comparing: ${fileName} with ${this.config.label || this.host.split(".")[0]} remote file ${versionLabel}`
                 );
                 await vscode.commands.executeCommand(
                     "vscode.diff",
                     vscode.Uri.file(path.normalize(this.tempFile.name)),
                     vscode.Uri.file(this.localFile),
-                    fileName + ` (${this.config.label || this.host.split(".")[0]} ↔ local)`,
+                    fileName + ` (${this.config.label || this.host.split(".")[0]}${versionLabel} ↔ local)`,
                     {
                         preview: false, 
                         selection: null, // Don't select any text in the compare
@@ -847,9 +872,7 @@ class RestApi {
                 return;
             }
         }
-        if (!this.authToken) {
-            await this.logon();
-        }
+        await this.logon();
         const apiUrl = `https://${this.host}/lsaf/api`;
         const urlPath = new URL(this.config.remoteEndpoint.url).pathname
             .replace(/\/lsaf\/webdav\/work\//, '/workspace/files/')
@@ -1026,9 +1049,10 @@ async function restApiProperties(param) {
 async function restApiVersions(param) {
     const restApi = new RestApi();
     try {
-        await restApi.getEndPointConfig(param); // based on the passed Uri (if defined)
-                                                // otherwise based on the path of the local file open in the active editor
-                                                // also sets remoteFile
+        const onlyRepo = true;
+        await restApi.getEndPointConfig(param, onlyRepo);   // based on the passed Uri (if defined)
+                                                            // otherwise based on the path of the local file open in the active editor
+                                                            // also sets remoteFile
         if (!restApi.config) {
             return;
         }
@@ -1173,7 +1197,7 @@ async function localFolderContents(param) {
 
 
 
-async function getEndpointConfigForCurrentPath(absoluteWorkingDir) {
+async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = false) {
     // Finds the first matching config file, if any, in the current directory, nearest ancestor, or user's home directory.
     const configFile = findConfig("webdav.json", { cwd: absoluteWorkingDir });
 
@@ -1186,6 +1210,11 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir) {
     let restApiConfig;
     try {
         restApiConfig = JSON.parse(fs.readFileSync(configFile));
+        if (onlyRepo) {
+            restApiConfig = restApiConfig.filter(conf => {
+                return (/\/repo\b/.test(conf?.label ||'') || /\/repo\b/.test(conf?.["/"] || ''));
+            });
+        }
     } catch (error) {
         vscode.window.showErrorMessage(`Error parsing config File: ${configFile}, ${error.message}`)
     }
@@ -1270,7 +1299,7 @@ async function getCredentials(key) {
     let credentials;
     try {
         credentials = await credStore.GetCredential(key);
-        if (credentials._username && credentials._password) {
+        if (credentials?._username && credentials?._password) {
             return credentials;
         } else {
             credentials = await askForCredentials(key);
