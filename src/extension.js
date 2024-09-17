@@ -1105,6 +1105,7 @@ async function restApiFolderContents(param) {
 
 
 async function localFolderContents(param) {
+    const restApi = new RestApi();
     let folderPath;
     if (! param instanceof vscode.Uri) {
         if (! typeof param === 'string') {
@@ -1114,17 +1115,17 @@ async function localFolderContents(param) {
             folderPath = param;
         }
     } else {
-        const fileStat = await this.getFileStat(param);
+        const fileStat = await restApi.getFileStat(param);
         if (fileStat.type === vscode.FileType.File) {
             return vscode.window.showWarningMessage(`Local Folder Contents: ${param.fsPath} is a file!`);
         }else if (fileStat.type === vscode.FileType.Directory) {
-            this.localFile = param.fsPath;
+            restApi.localFile = param.fsPath;
             folderPath = param.fsPath;
         } else {
             return vscode.window.showWarningMessage(`Upload File: ${param} is neither a file nor a folder!`);
         }
     }
-    let folderContents;
+    let folderContents, folderContentsText;
     try {
         folderContents = fs.readdirSync(folderPath).map(file => {
             const filePath = path.join(folderPath, file);
@@ -1136,14 +1137,35 @@ async function localFolderContents(param) {
             };
         });
         if (typeof folderContents === 'object') {
-            folderContents = beautify(JSON.stringify(folderContents), {
+            folderContentsText = beautify(JSON.stringify(folderContents), {
                 indent_size: 2,
                 space_in_empty_paren: true,
             });
+        } else {
+            folderContentsText = folderContents;
         }
-        console.log("Folder contents:\n", folderContents);
+        console.log("Folder contents:\n", folderContentsText);
         // vscode.window.showInformationMessage(folderContents);
-        showMultiLineText(folderContents, "Local Folder Contents", `Local folder contents: ${folderPath}`);
+        if (Array.isArray(folderContents)) {
+            const updatedFolderContents = await Promise.all(folderContents.map(async file => { 
+                const filePath = path.join(folderPath, file.name);
+                console.log('filePath:', filePath);
+                const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+                const newFile = {
+                    ...file, 
+                    name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
+                    path: file.path != null ? file.path : path.join(folderPath, file.name),
+                    mtime: file.mtime ?? file.lastModified,
+                    size: file.size ?? 0
+                };
+                return newFile;
+            }));
+            showFolderView(folderPath, 
+                updatedFolderContents,
+                restApi.config);
+        } else {
+            showMultiLineText(folderContentsText, "Local Folder Contents", `Local folder contents: ${folderPath}`);
+        }
     } catch (err) {
         console.log(err);
     }
