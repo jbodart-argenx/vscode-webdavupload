@@ -111,7 +111,6 @@ function getWebviewContent(folderPath, files) {
             function sortTable(n) {
                const table = document.getElementById("folderTable");
                let switching = true, rows, i, x, y, xVal, yVal, shouldSwitch, dir = "asc", switchCount = 0;
-               console.log('Sorting column', n);
                while (switching) {
                   switching = false;
                   rows = table.rows;
@@ -125,9 +124,7 @@ function getWebviewContent(folderPath, files) {
                      // Check if both values are numeric
                      const xNum = parseFloat(xVal);
                      const yNum = parseFloat(yVal);
-                     const bothNumeric = !isNaN(xNum) && !isNaN(yNum)  && !xVal.match(/[t:]/i);
-                     console.log('Sorting row', i, 'xVal:', xVal, 'yVal:', yVal, 'bothNumeric:', bothNumeric);
-                     
+                     const bothNumeric = !isNaN(xNum) && !isNaN(yNum)  && !xVal.match(/[t:]/i);                     
 
                      if (dir === "asc") {
                         if (bothNumeric) {
