@@ -3,8 +3,10 @@ const fs = require("fs");
 // const os = require("os");
 const findConfig = require("find-config");
 const path = require("path");
-const CredentialStore = require("../credentialstore/credentialstore.js");
+// const CredentialStore = require("../credentialstore/credentialstore.js");
+const keytar = require('keytar');
 const { getMultiLineText:getMultiLineInput, showMultiLineText } = require('./multiLineText.js');
+const { showFolderView } = require('./folderView.js');
 const { URL } = require("url");
 // const webdavFs = require("webdav-fs");
 const beautify = require("js-beautify");
@@ -27,11 +29,39 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 // Global variable to store authentication tokens (in memory only)
 let authTokens = {};
 
-const credStore = new CredentialStore.CredentialStore(
-    "vscode-lsaf-rest-api:",
-    ".lsaf-rest-api",
-    "lsaf-rest-api-secrets.json"
-);
+// const credStore = new CredentialStore.CredentialStore(
+//     "vscode-lsaf-rest-api:",
+//     ".lsaf-rest-api",
+//     "lsaf-rest-api-secrets.json"
+// );
+
+class CredentialStore{
+    constructor(){
+        this.app = 'jbodart-argenx.lsaf-rest-api';
+    }
+
+    async GetCredential(key){
+        const jsonCreds = await keytar.getPassword(this.app, key);
+        if (!jsonCreds) return null;
+        try {
+            const creds = JSON.parse(jsonCreds);
+            const newCreds = {
+                newCredentials: false,
+                _username: creds.username,
+                _password: creds.password,
+            };
+            return newCreds;
+        } catch (error) {
+            console.error(error.message)
+        }
+    }
+
+    async SetCredential(key, username, password){
+        await keytar.setPassword(this.app, key, JSON.stringify({username, password}));
+    }
+}
+
+const credStore = new CredentialStore();
 
 const EMPTY_CREDENTIALS = {
     newCredentials: true,
@@ -60,12 +90,17 @@ function activate(context) {
         "extension.restApiFolderContents",
         restApiFolderContents
     );
+    const localFolderContentsCommand = vscode.commands.registerCommand(
+        "extension.localFolderContents",
+        localFolderContents
+    );
 
     context.subscriptions.push(restApiUploadCommand);
     context.subscriptions.push(restApiCompareCommand);
     context.subscriptions.push(restApiPropertiesCommand);
     context.subscriptions.push(restApiVersionsCommand);
     context.subscriptions.push(restApiFolderContentsCommand);
+    context.subscriptions.push(localFolderContentsCommand);
 }
 
 exports.activate = activate;
@@ -242,7 +277,6 @@ class RestApi {
             }
         }
         if (!this.encryptedPassword) {
-            // const password = "abc123";
             const creds  = await getCredentials(this.host);
             const { _username:username, _password:password}  = creds;
             this.username = username;
@@ -495,7 +529,7 @@ class RestApi {
         console.log('urlPath:', urlPath)
         const filePath = this.remoteFile;
         // console.log('filePath:', filePath)
-        const apiRequest = `${urlPath}${filePath}?component=children`;
+        const apiRequest = `${urlPath}${filePath}?component=children&expand=item`;
         const requestOptions = {
             method: "GET",
             headers: { "X-Auth-Token": this.authToken },
@@ -1026,6 +1060,81 @@ async function restApiFolderContents(param) {
         }
         await restApi.getRemoteFolderContents(param);
         let folderContents = restApi.folderContents;
+        let folderContentsText;
+        if (typeof folderContents === 'object') {
+            folderContentsText = beautify(JSON.stringify(folderContents), {
+                indent_size: 2,
+                space_in_empty_paren: true,
+            });
+        }
+        let folderPath;
+        if (param instanceof vscode.Uri) {
+            folderPath = param.fsPath;
+        } else if (typeof param === 'string') {
+            folderPath = param;
+        } else {
+            folderPath = null;
+        }
+        console.log('restApi.filePath:', restApi.filePath);
+        console.log('restApi.remoteFile:', restApi.remoteFile);
+        const remoteFolderPath = new URL(restApi.config.remoteEndpoint.url).pathname
+        .replace(/\/lsaf\/webdav\/(work|repo)\//, '/')
+        .replace(/\/$/, '') + restApi.remoteFile;
+        console.log("Folder contents:\n", folderContentsText);
+        
+        // vscode.window.showInformationMessage(folderContents);
+        if (Array.isArray(folderContents.items)) {
+            showFolderView(remoteFolderPath, 
+            folderContents.items.map(file => { 
+                return ({
+                            ...file, 
+                            name: file.name.toString() + (file.schemaType === 'folder' ? '/' : ''),
+                            path: (file.path != null ? file.path : path.join(remoteFolderPath, file.name)),
+                            mtime: file.mtime ?? file.lastModified,
+                            size: file.size ?? 0
+                        });
+            }),
+            restApi.config);
+        } else {
+            showMultiLineText(folderContentsText, "Remote Folder Contents", `${restApi.config.label} folder contents: ${restApi.remoteFile}`);
+        }
+    } catch (err) {
+        console.log(err);
+    }
+}
+
+
+async function localFolderContents(param) {
+    let folderPath;
+    if (! param instanceof vscode.Uri) {
+        if (! typeof param === 'string') {
+            console.log('Cannot get local folder contents of ${param}')
+            return;
+        } else {
+            folderPath = param;
+        }
+    } else {
+        const fileStat = await this.getFileStat(param);
+        if (fileStat.type === vscode.FileType.File) {
+            return vscode.window.showWarningMessage(`Local Folder Contents: ${param.fsPath} is a file!`);
+        }else if (fileStat.type === vscode.FileType.Directory) {
+            this.localFile = param.fsPath;
+            folderPath = param.fsPath;
+        } else {
+            return vscode.window.showWarningMessage(`Upload File: ${param} is neither a file nor a folder!`);
+        }
+    }
+    let folderContents;
+    try {
+        folderContents = fs.readdirSync(folderPath).map(file => {
+            const filePath = path.join(folderPath, file);
+            const stats = fs.statSync(filePath);
+            return {
+                name: file,
+                size: stats.size,
+                mtime: stats.mtime.toISOString(),
+            };
+        });
         if (typeof folderContents === 'object') {
             folderContents = beautify(JSON.stringify(folderContents), {
                 indent_size: 2,
@@ -1034,11 +1143,12 @@ async function restApiFolderContents(param) {
         }
         console.log("Folder contents:\n", folderContents);
         // vscode.window.showInformationMessage(folderContents);
-        showMultiLineText(folderContents, "Remote Folder Contents", `${restApi.config.label} folder contents: ${restApi.remoteFile}`);
+        showMultiLineText(folderContents, "Local Folder Contents", `Local folder contents: ${folderPath}`);
     } catch (err) {
         console.log(err);
     }
 }
+
 
 
 async function getEndpointConfigForCurrentPath(absoluteWorkingDir) {
@@ -1134,56 +1244,41 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir) {
     }
 }
 
-function getCredentials(key) {
-    return new Promise((resolve, reject) => {
-        credStore.GetCredential(key).then(
-            (credentials) => {
-                if (credentials !== undefined) {
-                    resolve(credentials);
-                } else {
-                    askForCredentials(key).then(
-                        (credentials) => {
-                            resolve(credentials);
-                        },
-                        (error) => reject(error)
-                    );
-                }
-            },
-            (error) => reject(error)
-        );
-    });
+async function getCredentials(key) {
+    let credentials;
+    try {
+        credentials = await credStore.GetCredential(key);
+        if (credentials._username && credentials._password) {
+            return credentials;
+        } else {
+            credentials = await askForCredentials(key);
+            return credentials;
+        }
+    } catch (error) {
+        console.error(error.message)
+    }         
 }
 
-function askForCredentials(key) {
-    return new Promise((resolve, reject) => {
-        vscode.window.showInputBox({ prompt: "Username for " + key + " ?" }).then(
-            (username) => {
-                if (!username) {
-                    resolve(EMPTY_CREDENTIALS);
-                    return;
-                }
-
-                vscode.window
-                    .showInputBox({ prompt: "Password ?", password: true })
-                    .then(
-                        (password) => {
-                            if (!password) {
-                                resolve(EMPTY_CREDENTIALS);
-                                return;
-                            }
-
-                            resolve({
-                                newCredentials: true,
-                                _username: username,
-                                _password: password,
-                            });
-                        },
-                        (error) => reject(error)
-                    );
-            },
-            (error) => reject(error)
-        );
-    });
+async function askForCredentials(key) {
+    try {
+        const username = await vscode.window.showInputBox({ prompt: "Username for " + key + " ?" });
+        if (!username) {
+            return(EMPTY_CREDENTIALS);
+        }
+    
+        const password = await vscode.window.showInputBox({ prompt: "Password ?", password: true });
+        if (!password) {
+            return(EMPTY_CREDENTIALS);
+        }
+    
+        return({
+                    newCredentials: true,
+                    _username: username,
+                    _password: password,
+                });
+    } catch (error) {
+        console.error(error.message);
+    }
 }
 
 async function storeCredentials(key, username, password) {
