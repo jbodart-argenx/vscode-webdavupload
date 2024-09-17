@@ -1,4 +1,7 @@
-import * as vscode from "vscode";
+const vscode = require("vscode");
+const path = require('path');
+const isBinaryFile = require("isbinaryfile").isBinaryFile;
+const { exec } = require('child_process');
 
 
 export async function showFolderView(folderPath, folderContents, config) {
@@ -21,17 +24,39 @@ export async function showFolderView(folderPath, folderContents, config) {
          switch (message.command) {
             case "openFile":
                const fileUri = vscode.Uri.file(message.filePath);
+               const ext = path.extname(message.filePath).toLowerCase();
                try {
                   if (config?.remoteEndpoint?.url) {
                      // Ask what to do with remote file: download, compare to local, delete ?
-                     const action = await vscode.window.showQuickPick(['Download', 'Compare to Local']);
+                     const action = await vscode.window.showQuickPick(['View', 'Download', 'Compare to Local']);
                      const msg = `Action not yet implemented: ${action} for ${config.label} remote file: ${message.filePath}`;
                      console.log(msg);
                      vscode.window.showWarningMessage(msg);
                   } else {
-                     // Open the file in the editor
-                     const document = await vscode.workspace.openTextDocument(fileUri);
-                     vscode.window.showTextDocument(document);
+                     switch (ext) {
+                        case '.docx':
+                        case '.html':
+                        case '.md':
+                           vscode.commands.executeCommand('vscode.open', fileUri);
+                           break;
+                        case '.pdf':
+                        case '.xlsx':
+                        case '.xls':
+                        case '.rtf':
+                              openFile(fileUri);
+                           break;
+                        default:
+                           const isBinary = await isBinaryFile(message.filePath);
+                           if (! isBinary) {
+                              // Open the local file in the editor
+                              const document = await vscode.workspace.openTextDocument(fileUri);
+                              vscode.window.showTextDocument(document);
+                           } else {
+                              // vscode.commands.executeCommand('vscode.open', fileUri);
+                              openFile(fileUri);
+                           }
+                           break;
+                     }
                   }
                } catch (error) {
                   vscode.window.showErrorMessage(
@@ -169,5 +194,36 @@ function getWebviewContent(folderPath, files) {
          </body>
       </html>
    `;
+}
+
+
+function openFile(uri) {
+   if (uri && uri.scheme) {
+      openFileWithDefaultApp(uri.toString());
+      return;
+   }
+
+   const editor = vscode.window.activeTextEditor;
+   if (editor && editor.document.uri) {
+      openFileWithDefaultApp(editor.document.uri.toString());
+      return;
+   }
+
+   vscode.window.showInformationMessage('No editor is active. Select an editor or a file in the Explorer view.');
+}
+
+
+function openFileWithDefaultApp(filePath) {
+   if (filePath instanceof vscode.Uri) {
+      filePath = decodeURIComponent(filePath.fsPath);
+   } else if (typeof filePath === 'string' && /file:\/\/\//.test(filePath)) {
+      filePath = decodeURIComponent(vscode.Uri.parse(filePath).fsPath);
+   }
+   console.log('filePath:', filePath);
+   exec(`start "" "${filePath}"`, (error) => {
+      if (error) {
+         console.error('Error opening file:', error);
+      }
+   });
 }
 
