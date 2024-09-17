@@ -39,7 +39,7 @@
             },
             {
                 "command": "extension.restApiFolderContents",
-                "title": "LSAF Rest API: Get Folder Contents",
+                "title": "LSAF Rest API: Get Remote Folder Contents",
                 "category": "LSAF"
             },
             {
