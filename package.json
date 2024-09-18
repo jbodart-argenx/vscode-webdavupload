@@ -154,6 +154,7 @@
         "webpack-cli": "^4.9.1"
     },
     "dependencies": {
+        "adm-zip": "^0.5.16",
         "event-stream": "3.3.4",
         "find-config": "^1.0.0",
         "form-data": "^4.0.0",
@@ -164,6 +165,7 @@
         "path": "^0.12.7",
         "q": "^1.5.1",
         "readable-stream": "^3.3.0",
+        "strip-bom-buf": "^4.0.0",
         "tmp": "0.1.0",
         "underscore": "^1.13.1"
     }
