@@ -4,19 +4,24 @@ const isBinaryFile = require("isbinaryfile").isBinaryFile;
 const { exec } = require('child_process');
 
 
-export async function showFolderView(folderPath, folderContents, config) {
+export async function showFolderView(folderPath, folderContents, isLocal, config) {
 
    const panel = vscode.window.createWebviewPanel(
-      "folderContents",
-      "Folder Contents",
+      "folderContents",  // webview identifier
+      // `${isLocal ? "Local" : "Remote "+config.label} Folder Contents`,
+      `${path.basename(folderPath)}/${isLocal ? "" : " ("+config.label+")"}`, // title displayed
       vscode.ViewColumn.One,
       {
          enableScripts: true, // Allow running JavaScript in the Webview
       }
    );
 
+   // provide more details in tooltip displayed when hovering over the tooltip - does not work!
+   panel.title = `${path.basename(folderPath)}/${isLocal ? "" : " ("+config.label+")"}`;
+   panel.description = `${isLocal ? "local: " : config.label+": "}${folderPath}/`;
+
    // Set the HTML content
-   panel.webview.html = getWebviewContent(folderPath, folderContents);
+   panel.webview.html = getWebviewContent(folderPath, isLocal, folderContents, config);
 
    // Handle messages from the Webview
    panel.webview.onDidReceiveMessage(
@@ -73,7 +78,7 @@ export async function showFolderView(folderPath, folderContents, config) {
 }
 
 
-function getWebviewContent(folderPath, files) {
+function getWebviewContent(folderPath, isLocal, files, config) {
 
    return `
       <html>
@@ -95,27 +100,29 @@ function getWebviewContent(folderPath, files) {
          </style>
          </head>
          <body>
-         <h2>Contents of ${folderPath}</h2>
+         <h2>Contents of ${isLocal ? "local" : config.label} folder: ${folderPath}</h2>
          <table id="folderTable">
             <thead>
                <tr>
                <th onclick="sortTable(0)">Name</th>
                <th onclick="sortTable(1)">Size</th>
                <th onclick="sortTable(2)">Last Modified</th>
+               <th onclick="sortTable(3)">MD5sum</th>
                </tr>
             </thead>
             <tbody>
                ${files
-            .map(
-               (file) => `
-               <tr>
-                  <td><a href="#" class="file-link" data-path="${file.path}">${file.name}</a></td>
-                  <td>${file.size}</td>
-                  <td>${file.mtime}</td>
-               </tr>
-               `
-            )
-            .join("")}
+               .map(
+                  (file) => `
+                  <tr>
+                     <td><a href="#" class="file-link" data-path="${file.path}">${file.name}</a></td>
+                     <td>${file.size}</td>
+                     <td>${file.mtime}</td>
+                     <td>${file.md5sum}</td>
+                  </tr>
+                  `
+               )
+               .join("")}
             </tbody>
          </table>
 
