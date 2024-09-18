@@ -7,6 +7,10 @@ const path = require("path");
 const keytar = require('keytar');
 const { getMultiLineText:getMultiLineInput, showMultiLineText } = require('./multiLineText.js');
 const { showFolderView } = require('./folderView.js');
+const { fileMD5sum, fileMD5sumStripBom } = require('./md5sum.js');
+const isBinaryFile = require("isbinaryfile").isBinaryFile;
+// const languageEncoding = require("detect-file-encoding-and-language");
+
 const { URL } = require("url");
 // const webdavFs = require("webdav-fs");
 const beautify = require("js-beautify");
@@ -131,6 +135,8 @@ class RestApi {
         this.comment = null;
         this.fileProperties = null;
         this.fileVersions = null;
+        this.folderContents = null;
+        this.remoteFolderContents = null;
     }
 
     get apiUrl () {
@@ -588,16 +594,16 @@ class RestApi {
                 throw new Error(`HTTP error! ${result}`);
             } else {
                 if (data) {
-                    this.folderContents = data;
+                    this.remoteFolderContents = data;
                 } else {
-                    this.folderContents = result;    
+                    this.remoteFolderContents = result;    
                 }            
             }
 
         } catch (error) {
             console.error("Error fetching Remote Folder Contents:", error);
             vscode.window.showErrorMessage("Error fetching Remote Folder Contents:", error.message);
-            this.folderContents = null;
+            this.remoteFolderContents = null;
         }
     };
 
@@ -1074,6 +1080,12 @@ async function restApiVersions(param) {
 
 
 async function restApiFolderContents(param) {
+    const showFolderContents = true;
+    await remoteFolderContents(param, showFolderContents);
+}
+
+
+async function remoteFolderContents(param) {
     const restApi = new RestApi();
     try {
         await restApi.getEndPointConfig(param); // based on the passed Uri (if defined)
@@ -1083,7 +1095,7 @@ async function restApiFolderContents(param) {
             return;
         }
         await restApi.getRemoteFolderContents(param);
-        let folderContents = restApi.folderContents;
+        let folderContents = restApi.remoteFolderContents;
         let folderContentsText;
         if (typeof folderContents === 'object') {
             folderContentsText = beautify(JSON.stringify(folderContents), {
@@ -1104,21 +1116,27 @@ async function restApiFolderContents(param) {
         const remoteFolderPath = new URL(restApi.config.remoteEndpoint.url).pathname
         .replace(/\/lsaf\/webdav\/(work|repo)\//, '/')
         .replace(/\/$/, '') + restApi.remoteFile;
+        console.log("remoteFolderPath:\n", remoteFolderPath);
         console.log("Folder contents:\n", folderContentsText);
         
         // vscode.window.showInformationMessage(folderContents);
+        const isLocal = false;
         if (Array.isArray(folderContents.items)) {
-            showFolderView(remoteFolderPath, 
-            folderContents.items.map(file => { 
-                return ({
-                            ...file, 
-                            name: file.name.toString() + (file.schemaType === 'folder' ? '/' : ''),
-                            path: (file.path != null ? file.path : path.join(remoteFolderPath, file.name)),
-                            mtime: file.mtime ?? file.lastModified,
-                            size: file.size ?? 0
-                        });
-            }),
-            restApi.config);
+            showFolderView(
+                remoteFolderPath, 
+                folderContents.items.map(file => { 
+                    return ({
+                                ...file, 
+                                name: file.name.toString() + (file.schemaType === 'folder' ? '/' : ''),
+                                path: (file.path != null ? file.path : path.join(remoteFolderPath, file.name)),
+                                mtime: file.mtime ?? file.lastModified,
+                                size: file.size ?? 0,
+                                md5sum: (file.digest || '').toLowerCase()
+                            });
+                }),
+                isLocal,
+                restApi.config
+            );
         } else {
             showMultiLineText(folderContentsText, "Remote Folder Contents", `${restApi.config.label} folder contents: ${restApi.remoteFile}`);
         }
@@ -1151,20 +1169,44 @@ async function localFolderContents(param) {
     }
     let folderContents, folderContentsText;
     try {
-        folderContents = fs.readdirSync(folderPath).map(file => {
-            const filePath = path.join(folderPath, file);
-            const stats = fs.statSync(filePath);
-            return {
-                name: file,
-                size: stats.size,
-                mtime: stats.mtime.toISOString(),
-            };
-        });
+        const files = await fs.promises.readdir(folderPath); // Asynchronous read of directory contents
+
+        folderContents = await Promise.all(
+            files.map(async file => {
+                const filePath = path.join(folderPath, file);
+                const stats = await fs.promises.stat(filePath); // Asynchronous stat call
+                const isBinary = isBinaryFile(filePath);
+
+                let md5sum = '';
+                if (stats.isFile()) {
+                    
+                    // languageEncoding(filePath).then((fileInfo) => console.log(filePath+':', JSON.stringify(fileInfo)));
+
+                    // Calculate MD5 using the previously defined calculateMD5WithLF() function
+                    if (isBinary) {
+                        md5sum = await fileMD5sum(filePath);
+                    } else {
+                        // md5sum = await fileMD5sumConvertCRLF(filePath);
+                        md5sum = fileMD5sumStripBom(filePath);
+                    }
+                } else {
+                    md5sum = '';
+                }
+
+                return {
+                    name: file,
+                    size: stats.size,
+                    mtime: stats.mtime.toISOString(),
+                    md5sum: md5sum, // Add MD5 checksum to the returned object
+                };
+            })
+        );
         if (typeof folderContents === 'object') {
             folderContentsText = beautify(JSON.stringify(folderContents), {
                 indent_size: 2,
                 space_in_empty_paren: true,
             });
+            restApi.folderContents = folderContents;
         } else {
             folderContentsText = folderContents;
         }
@@ -1184,9 +1226,13 @@ async function localFolderContents(param) {
                 };
                 return newFile;
             }));
-            showFolderView(folderPath, 
-                updatedFolderContents,
-                restApi.config);
+            const isLocal = true;
+            showFolderView(
+                    folderPath, 
+                    updatedFolderContents,
+                    isLocal,
+                    restApi.config
+                );
         } else {
             showMultiLineText(folderContentsText, "Local Folder Contents", `Local folder contents: ${folderPath}`);
         }
