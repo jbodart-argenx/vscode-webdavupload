@@ -84,24 +84,51 @@ function getWebviewContent(folderPath, isLocal, files, config) {
       <html>
          <head>
          <style>
+            h2 {
+               word-wrap: break-word; /* Ensures long strings break */
+            }
             table {
+               table-layout: fixed;
                width: 100%;
-               border-collapse: collapse;
+               border-collapse: separate;
+               border-spacing: 3px 0; 
             }
             th, td {
-               padding: 3px;
+               padding: 2px;
                text-align: left;
                border-bottom: 1px solid #ddd;
             }
             th {
                cursor: pointer;
             }
-            table td:nth-child(2), table th:nth-child(2) { text-align: end; }
+            /* Apply these styles to all cells in the first column */
+            td:nth-child(1), th:nth-child(1) {
+               overflow: hidden;
+               white-space: nowrap;
+               /*
+               text-overflow: ellipsis;
+               max-width: 30%; 
+               */
+            }
+            td:nth-child(2), th:nth-child(2) { 
+               text-align: end;  
+            }
+            td:nth-child(3), th:nth-child(3), td:nth-child(4), th:nth-child(4) { 
+               overflow: hidden;
+               white-space: nowrap;
+               margin-right: 2px;
+            }
          </style>
          </head>
          <body>
          <h2>Contents of ${isLocal ? "local" : config.label} folder: ${folderPath}</h2>
          <table id="folderTable">
+            <colgroup>
+               <col style="width: 50%;">
+               <col style="width: 10%;">
+               <col style="width: 8ch;">
+               <col style="width: 8ch;">
+            </colgroup>
             <thead>
                <tr>
                <th onclick="sortTable(0)">Name</th>
