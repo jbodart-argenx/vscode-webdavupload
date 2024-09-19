@@ -13,8 +13,9 @@ async function main() {
       sourcesContent: false,
       platform: 'node',
       outfile: 'dist/extension.js',
-      external: ['vscode', 'keytar'],
+      external: ['vscode'],
       logLevel: 'silent',
+      loader: { '.node': 'file' },
       plugins: [
          /* add to the end of plugins array */
          esbuildProblemMatcherPlugin
