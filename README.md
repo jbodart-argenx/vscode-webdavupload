@@ -59,4 +59,4 @@ Assuming the current VScode workspace root folder has multiple corresponding web
 ```
 
 ## Password storage
-The first time you connect to a new remote endpoint this extension will ask for a username and password. These credentials will be stored in the system's keychain (using the `keytar` library). On macOS the passwords are managed by the Keychain, on Linux they are managed by the Secret Service API/libsecret, and on Windows they are managed by Credential Vault.
+The first time you connect to a new remote endpoint this extension will ask for a username and password. These credentials will be stored in VScode built-in Secret Storage.
