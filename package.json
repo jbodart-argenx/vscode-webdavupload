@@ -2,7 +2,7 @@
     "name": "lsaf-rest-api",
     "displayName": "LSAF Rest API Upload",
     "description": "Compares & uploads local files to a remote LSAF host using Rest API",
-    "version": "0.0.5",
+    "version": "0.0.7",
     "publisher": "jbodart-argenx",
     "engines": {
         "vscode": "^1.16.0"
@@ -11,10 +11,13 @@
         "Other"
     ],
     "activationEvents": [
-        "onStartupFinished",
-        "onEditSession:file"
+        "onStartupFinished"
     ],
     "main": "./dist/extension.js",
+    "vsce": {
+        "dependencies": true,
+        "yarn": false
+    },
     "contributes": {
         "commands": [
             {
@@ -46,6 +49,11 @@
                 "command": "extension.localFolderContents",
                 "title": "LSAF Rest API: Get Local Folder Contents",
                 "category": "LSAF"
+            },
+            {
+                "command": "extension.compareFolderContents",
+                "title": "LSAF Rest API: Compare Folder Contents",
+                "category": "LSAF"
             }
         ],
         "menus": {
@@ -76,6 +84,11 @@
                 },
                 {
                     "command": "extension.localFolderContents",
+                    "when": "explorerResourceIsFolder",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "extension.compareFolderContents",
                     "when": "explorerResourceIsFolder",
                     "group": "LSAF"
                 }
@@ -160,7 +173,6 @@
         "form-data": "^4.0.0",
         "isbinaryfile": "^5.0.2",
         "js-beautify": "^1.15.1",
-        "keytar": "^7.9.0",
         "node-fetch": "^2.7.0",
         "path": "^0.12.7",
         "q": "^1.5.1",
