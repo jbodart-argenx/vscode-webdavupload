@@ -459,14 +459,12 @@ export class RestApi {
             files.map(async file => {
                const filePath = path.join(folderPath, file);
                const stats = await fs.promises.stat(filePath); // Asynchronous stat call
-               const isBinary = isBinaryFile(filePath);
-
+               let isBinary = null;
                let md5sum = '';
+
                if (stats.isFile()) {
-
-                  // languageEncoding(filePath).then((fileInfo) => console.log(filePath+':', JSON.stringify(fileInfo)));
-
                   // Calculate MD5 using the previously defined calculateMD5WithLF() function
+                  isBinary = isBinaryFile(filePath);
                   if (isBinary) {
                      md5sum = await fileMD5sum(filePath);
                   } else {
