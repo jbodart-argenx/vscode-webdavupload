@@ -2,7 +2,7 @@ const vscode = require("vscode");
 const path = require('path');
 const fs = require('fs');
 const isBinaryFile = require("isbinaryfile").isBinaryFile;
-const { restApiCompare, restApiDownload, restApiView } = require('./rest-api');
+const { restApiCompare, restApiDownload, restApiView, restApiFolderContents, localFolderContents } = require('./rest-api');
 const { openFile } = require('./openFile');
 
 export async function showFolderView(folderPath, folderContents, isLocal, config) {
@@ -27,11 +27,43 @@ export async function showFolderView(folderPath, folderContents, isLocal, config
    // Handle messages from the Webview
    panel.webview.onDidReceiveMessage(
       async (message) => {
-         switch (message.command) {
-            case "openFile":
-               const fileUri = vscode.Uri.file(message.filePath);
-               const ext = path.extname(message.filePath).toLowerCase();
-               try {
+         const fileUri = vscode.Uri.file(message.filePath);
+         const ext = path.extname(message.filePath).toLowerCase();
+         try {
+            switch (message.command) {
+               case "openFolder":
+                  if (config?.remoteEndpoint?.url && config?.workspaceFolder) { // Remote folder
+                     const remotePathPrefix = new URL(config.remoteEndpoint.url).pathname.replace(/\/lsaf\/webdav\/(work|repo)(?=\/)/, '').replace(/\/$/, '');
+                     const localPath = path.join(config.workspaceFolder?.uri?.fsPath || config.workspaceFolder,
+                        config?.localRootPath,
+                        `|${message.filePath}`.replace(`|${remotePathPrefix}`, '').replace('|', '')
+                     );
+                     let localPathExists = false;
+                     try {
+                        await fs.promises.stat(localPath);
+                        localPathExists = true;
+                        console.log(`localPath exists: ${localPath}`);
+                     } catch (error) {
+                        console.log(`localPath does not exist: ${localPath}`);
+                     } 
+                     const actions = ['View'];
+                     if (localPathExists) {
+                        actions.push('Download (overwrite) ⚠');
+                        actions.push('Compare Local to Remote');
+                     } else { 
+                        actions.push('Download (new)')
+                     }
+                     // remote folder default action: Open
+                     const localPathUri = vscode.Uri.file(localPath);
+                     restApiFolderContents(localPathUri, null, config);
+                  } else {
+                     // local folder default action: Open
+                     const fileUri = vscode.Uri.file(message.filePath);
+                     localFolderContents(fileUri);
+                  }
+                  break;
+
+               case "openFile":
                   if (config?.remoteEndpoint?.url && config?.workspaceFolder) { // Remote folder
                      const remotePathPrefix = new URL(config.remoteEndpoint.url).pathname.replace(/\/lsaf\/webdav\/(work|repo)(?=\/)/, '').replace(/\/$/, '');
                      const localPath = path.join(config.workspaceFolder?.uri?.fsPath || config.workspaceFolder,
@@ -75,38 +107,46 @@ export async function showFolderView(folderPath, folderContents, isLocal, config
                         console.log(msg);
                         vscode.window.showWarningMessage(msg);
                      };
-                  } else {  // Local folder
-                     // Local file action (default: 'Open')
-                     switch (ext) {
-                        case '.docx':
-                        case '.html':
-                        case '.md':
-                           vscode.commands.executeCommand('vscode.open', fileUri);
-                           break;
-                        case '.pdf':
-                        case '.xlsx':
-                        case '.xls':
-                        case '.rtf':
-                              openFile(fileUri);
-                           break;
-                        default:
-                           const isBinary = await isBinaryFile(message.filePath);
-                           if (! isBinary) {
-                              // Open the local file in the editor
-                              const document = await vscode.workspace.openTextDocument(fileUri);
-                              vscode.window.showTextDocument(document);
-                           } else {
-                              openFile(fileUri);
-                           }
-                           break;
+                  } else {  // Local file
+                     // const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(fPath));
+                     const fileStat = await vscode.workspace.fs.stat(fileUri);
+                     let itemType;
+                     if (fileStat.type === vscode.FileType.File) {
+                        itemType = 'file';
+                        // Local file action (default: 'Open')
+                        switch (ext) {
+                           case '.docx':
+                           case '.html':
+                           case '.md':
+                              vscode.commands.executeCommand('vscode.open', fileUri);
+                              break;
+                           case '.pdf':
+                           case '.xlsx':
+                           case '.xls':
+                           case '.rtf':
+                                 openFile(fileUri);
+                              break;
+                           default:
+                              const isBinary = await isBinaryFile(message.filePath);
+                              if (! isBinary) {
+                                 // Open the local file in the editor
+                                 const document = await vscode.workspace.openTextDocument(fileUri);
+                                 vscode.window.showTextDocument(document);
+                              } else {
+                                 openFile(fileUri);
+                              }
+                              break;
+                        }
+                     } else {
+                        return vscode.window.showWarningMessage(`folderView: "${message.filePath}" is not a file, but a ${itemType}!`);
                      }
                   }
-               } catch (error) {
-                  vscode.window.showErrorMessage(
-                     `Failed to open file: ${error.message}`
-                  );
-               }
-               return;
+               break;
+            }
+         } catch (error) {
+            vscode.window.showErrorMessage(
+               `Failed to open file: ${error.message}`
+            );
          }
       },
       undefined,
@@ -180,7 +220,7 @@ function getWebviewContent(folderPath, isLocal, files, config) {
                .map(
                   (file) => `
                   <tr>
-                     <td><a href="#" class="file-link" data-path="${file.path}">${file.name}</a></td>
+                     <td><a href="#" class="${/\/$/.test(file.name) ? 'folder-link' : 'file-link'}" data-path="${file.path}">${file.name}</a></td>
                      <td>${file.size}</td>
                      <td>${file.mtime}</td>
                      <td>${file.md5sum}</td>
@@ -200,6 +240,17 @@ function getWebviewContent(folderPath, isLocal, files, config) {
                const filePath = event.target.getAttribute('data-path');
                vscode.postMessage({
                   command: 'openFile',
+                  filePath: filePath
+               });
+               });
+            });
+
+            document.querySelectorAll('.folder-link').forEach(link => {
+               link.addEventListener('click', event => {
+               event.preventDefault();
+               const filePath = event.target.getAttribute('data-path');
+               vscode.postMessage({
+                  command: 'openFolder',
                   filePath: filePath
                });
                });
