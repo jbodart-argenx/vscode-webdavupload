@@ -1,6 +1,7 @@
 const vscode = require("vscode");
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 const isBinaryFile = require("isbinaryfile").isBinaryFile;
 const { restApiCompare, restApiUpload } = require('./rest-api');
 const { openFile } = require('./openFile');
@@ -28,18 +29,20 @@ export async function showTwoFoldersView(bothFoldersContents, folder1Path, isFol
    // Handle messages from the Webview
    panel.webview.onDidReceiveMessage(
       async (message) => {
-         let fileUri, ext;
+         let fileUri, ext, config;
          switch (message.command) {
             case "openLocalFile":
-               fileUri = vscode.Uri.file(message.filePath);
-               ext = path.extname(message.filePath).toLowerCase();
-               const action = await vscode.window.showQuickPick(['Open', 'Upload', 'Compare to Remote']);
-               if (action === 'Upload') {
-                  return restApiUpload(message.filePath);
-               } else if (action === 'Compare to Remote') {
-                  return restApiCompare(message.filePath);
-               } else if (action === 'Open') {
-                  try {
+               try {
+                  fileUri = vscode.Uri.file(message.filePath);
+                  ext = path.extname(message.filePath).toLowerCase();
+
+                  // Ask what to do with local file: Open, Upload, Compare to Remote ?
+                  const action = await vscode.window.showQuickPick(['Open', 'Upload', 'Compare to Remote']);
+                  if (action === 'Upload') {
+                     return restApiUpload(message.filePath);
+                  } else if (action === 'Compare to Remote') {
+                     return restApiCompare(message.filePath);
+                  } else if (action === 'Open') {
                      switch (ext) {
                         case '.docx':
                         case '.html':
@@ -67,36 +70,68 @@ export async function showTwoFoldersView(bothFoldersContents, folder1Path, isFol
                            }
                            break;
                      }
-                  } catch (error) {
-                     vscode.window.showErrorMessage(
-                        `Failed to open file: ${error.message}`
-                     );
                   }
+               } catch (error) {
+                  vscode.window.showErrorMessage(
+                     `Failed to open file: ${error.message}`
+                  );
                }
-               return;
+               break;
 
-               case "openRemoteFile":
-                  fileUri = vscode.Uri.file(message.filePath);
-                  ext = path.extname(message.filePath).toLowerCase();
-                  try {
-                     if (typeof message.config === 'string' && message.config.trim().charAt(0) === '{') {
-                        message.config = JSON.parse(message.config);
+            case "openRemoteFile":
+               if (folder2Config) {
+                  config = folder2Config;
+               } else if (folder1Config) {
+                  config = folder1Config;
+               } else {
+                  throw new Error("message.command is: \"openRemoteFile\", but no config was found");
+               }
+               try {
+                  if (config?.remoteEndpoint?.url && config?.workspaceFolder) {
+                     const remotePathPrefix = new URL(config.remoteEndpoint.url).pathname.replace(/\/lsaf\/webdav\/(work|repo)(?=\/)/, '').replace(/\/$/, '');
+                     const localPath = path.join(config.workspaceFolder?.uri?.fsPath || config.workspaceFolder,
+                        config?.localRootPath,
+                        `|${message.filePath}`.replace(`|${remotePathPrefix}`, '').replace('|', '')
+                     );
+                     let localPathExists = false;
+                     try {
+                        await fs.promises.stat(localPath);
+                        localPathExists = true;
+                        console.log(`localPath exists: ${localPath}`);
+                     } catch (error) {
+                        console.log(`localPath does not exist: ${localPath}`);
+                     } 
+                     const actions = ['View', 'Download'];
+                     if (localPathExists) {
+                        actions.push('Compare Local to Remote');
                      }
+                     fileUri = vscode.Uri.file(message.filePath);
+                     ext = path.extname(message.filePath).toLowerCase();
                      if (message?.config?.remoteEndpoint?.url) {
                         // Ask what to do with remote file: download, compare to local, delete ?
                         const action = await vscode.window.showQuickPick(['View', 'Download', 'Compare to Local']);
-                        const msg = `Action not yet implemented: ${action} for ${message?.config?.label} remote file: ${message.filePath}`;
-                        console.log(msg);
-                        vscode.window.showWarningMessage(msg);
+                        if (action === "xx") {
+
+                        } else if (action === "yy") {
+
+                        } else {
+                           const msg = `Action not yet implemented: ${action} for ${message?.config?.label} remote file: ${message.filePath}`;
+                           console.log(msg);
+                           vscode.window.showWarningMessage(msg);
+                        }
                      } else {
                         console.log("(openRemoteFile) Unexpected message:", message);
                      }
-                  } catch (error) {
-                     vscode.window.showErrorMessage(
-                        `Failed to open remote file: ${error.message}`
-                     );
                   }
-                  return;         }
+               } catch (error) {
+                  vscode.window.showErrorMessage(`Failed to open remote file: ${error.message}`);
+               }
+               break;
+
+            default:
+               break;
+            
+         }  // end of switch()
       },
       undefined,
       undefined
@@ -162,7 +197,7 @@ function getWebviewContent(bothFoldersContents, folder1Path, isFolder1Local, fol
             font-weight: bold;
          }
          .higher {
-            color: pink; /* Higher values */
+            color: #f08080; /* Higher values */
          }
          .lower {
             color: lightblue; /* Lower values */
@@ -216,7 +251,7 @@ function getWebviewContent(bothFoldersContents, folder1Path, isFolder1Local, fol
                      <td${file.mtime1 !== file.mtime2 ? ' class="'+(file.mtime1 > file.mtime2 ? 'higher' : 'lower')+'"' : ''}>${file.mtime1}</td>
                      <td${file.md5sum1 !== file.md5sum2 ? ' class="differ"' : ''}>${file.md5sum1}</td>
                      <td class="spacer"> </td> <!-- Spacer column between the two sections -->
-                     <td><a href="#" class="${class2link}" data-path="${folder2Path}/${file.name2}">${file.name2}</a></td>
+                     <td><a href="#" class="${class2link}" data-path="${path.join(folder2Path, file.name2)}">${file.name2}</a></td>
                      <td${file.size1  !== file.size2  ? ' class="'+(file.size1  < file.size2  ? 'higher' : 'lower')+'"' : ''}>${file.size2}</td>
                      <td${file.mtime1 !== file.mtime2 ? ' class="'+(file.mtime1 < file.mtime2 ? 'higher' : 'lower')+'"' : ''}>${file.mtime2}</td>
                      <td${file.md5sum1 !== file.md5sum2 ? ' class="differ"' : ''}>${file.md5sum2}</td>
@@ -250,7 +285,7 @@ function getWebviewContent(bothFoldersContents, folder1Path, isFolder1Local, fol
                msg = {
                   command: 'openRemoteFile',
                   filePath: filePath,
-                  config: '${JSON.stringify(folder2Config)}'
+                  config: ${JSON.stringify(folder2Config)}
                };
                console.log('vscode.postMessage:', JSON.stringify(msg));
                vscode.postMessage(msg);
