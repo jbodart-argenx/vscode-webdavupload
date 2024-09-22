@@ -30,3 +30,11 @@
 - Extract classes and functions to new modules: rest-api.js, auth.js, endpointConfig.js
 - Add local file actions "Upload" and "Compare to Remote"
 - Add remote file actions menu
+
+## 0.0.8
+
+- Add folder open action for both local and remote single folder views
+- Warn in case File Download action would overwrite an existing file
+- Properly handle "View" action on remote binary files
+- Skip download of big remote files (>= 100 MB)
+- Distinguish local from remote file actions in 2 Folders Compare Views
