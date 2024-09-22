@@ -237,7 +237,7 @@ export class RestApi {
       }
    }
 
-   async getRemoteFileContents(param) {
+   async getRemoteFileContents(param, pick_multiple = true) {
       if (param instanceof vscode.Uri) {
          this.localFile = param.fsPath;
       }
@@ -252,12 +252,11 @@ export class RestApi {
       const filePath = this.remoteFile;
       let selectedVersion = null;
       let selectedVersions = null;
-      let compareVersion = null;
+      // let compareVersion = null;
       if (/\/repository\/files\//.test(urlPath)) {
          await this.getRemoteFileVersions();
          let versions = this.fileVersions;
          const MAX_ITEMS = 30;
-         const PICK_MULTIPLE = true;
          if (Array.isArray(versions.items) && versions.items.length > 1) {
             const allVersions = versions.items.slice(0, MAX_ITEMS).map(item => {
                return ({
@@ -267,11 +266,11 @@ export class RestApi {
                })
             });
             selectedVersions = await vscode.window.showQuickPick(allVersions,
-               { canPickMany: PICK_MULTIPLE, title: 'Select a version', placeHolder: allVersions[0].label, ignoreFocusOut: true, });
-            if (!!PICK_MULTIPLE) {
+               { canPickMany: pick_multiple, title: 'Select a version', placeHolder: allVersions[0].label, ignoreFocusOut: true, });
+            if (!!pick_multiple) {
                selectedVersion = selectedVersions[0];
-               compareVersion = selectedVersions[1];
-               console.log('compareVersion:', compareVersion);
+               //compareVersion = selectedVersions[1];
+               //console.log('compareVersion:', compareVersion);
             }
          } else {
             selectedVersions = [selectedVersions];
@@ -642,6 +641,182 @@ export class RestApi {
       }
    };
 
+   async saveFileContentsAs(outFile) {
+      if (! Array.isArray(this.fileContents)) {
+         this.fileContents = [this.fileContents];
+      }
+      if (!this.fileContents || this.fileContents?.length === 0) {
+         await this.getRemoteFileContents()
+         if (!this.fileContents) {
+            throw new Error("Failed to get remote file contents.");
+         }
+      }
+      if (typeof outFile === 'boolean' && outFile) {
+         let defaultFilename = this.remoteFile ? path.basename(this.remoteFile) : '';
+         // Prompt user to select a folder
+         const folderUri = await vscode.window.showOpenDialog({
+               canSelectFolders: true,
+               canSelectFiles: false,
+               canSelectMany: false, 
+               title: `Select download folder ${this.remoteFile ? 'for '+ this.remoteFile : ''}`
+         });
+
+         if (!folderUri || folderUri.length === 0) {
+               vscode.window.showErrorMessage('No download folder selected');
+               return;
+         }
+
+         // Prompt user to enter a filename with a default value
+         const filename = await vscode.window.showInputBox({
+               prompt: 'Enter the filename',
+               value: defaultFilename
+         });
+
+         if (!filename) {
+               vscode.window.showErrorMessage('No filename provided');
+               return;
+         }
+
+         outFile = path.join(folderUri[0].fsPath, filename);
+
+      } else if (! outFile) {
+         outFile = this.localFile;
+      }
+      try {
+         if (outFile && this.fileContents[0] != null) {
+            await fs.promises.writeFile(outFile, this.fileContents[0]);
+            console.log(`Downloaded as ${outFile}`);
+         }
+      } catch (err) {
+         console.error(`Error: ${err.message}`);
+         vscode.window.showErrorMessage(`Error: ${err.message}`)
+      }
+   }
+
+   // viewFileContents
+   async viewFileContents(){
+      // Write the remote file to a local temporary file
+      // const extension = path.extname(this.remoteFile || this.localFile||'.');
+      try {
+         if (!this.fileContents || this.fileContents?.length === 0) {
+            await this.getRemoteFileContents()
+            if (!this.fileContents) {
+               throw new Error("Failed to get remote file contents.");
+            }
+         }
+         
+         if (!Array.isArray(this.fileContents)) {
+            this.fileContents = [this.fileContents];
+         }
+
+         /*
+         // Simple synchronous temporary file creation, the file will be closed and unlinked on process exit.
+         const tempFile = tmp.fileSync({ postfix: extension });
+         console.log("tempFile:", tempFile);
+
+         await fs.promises.writeFile(tempFile.name, this.fileContents[0]);
+         console.log(`Downloaded as ${tempFile.name}`);
+         // Set the file to read-only (cross-platform)
+         try {
+            await fs.promises.chmod(tempFile.name, 0o444);
+            console.log(`File is now read-only: ${tempFile.name}`);
+         } catch (err) {
+            console.error(`Failed to set file as read-only: ${err}`);
+         }
+         */
+
+         const fileName = this.remoteFile.slice(this.remoteFile.lastIndexOf("/") + 1);
+         const versionLabel = this.fileVersions[0] ? ` v${this.fileVersions[0]}` : '';
+         const confLabel = `${(this.config.label || this.host.split(".")[0])}`.replace('/','-');
+
+            // Create a temporary file URI with a specific extension
+            const tempFileUri = vscode.Uri.parse('untitled:' + `(${confLabel}${versionLabel}) ${fileName}`);
+
+            // Open the temporary file in the editor
+            const document = await vscode.workspace.openTextDocument(tempFileUri);
+            const editor = await vscode.window.showTextDocument(document, { preview: false });
+
+            // Add content to the document
+            await editor.edit(editBuilder => {
+               editBuilder.insert(new vscode.Position(0, 0), this.fileContents[0]);
+            });
+
+            /*
+            // Set a custom title for the editor tab
+            vscode.commands.executeCommand('vscode.openWith', tempFileUri, 'default', {
+               viewColumn: vscode.ViewColumn.One,
+               preserveFocus: true,
+               customTitle: `(${this.config.label || this.host.split(".")[0]}${versionLabel}) ${fileName}`
+            });
+            */
+
+         /*
+         // Open the temporary file in the editor
+         const normTempFile = path.normalize(tempFile.name);
+         const document = await vscode.workspace.openTextDocument(normTempFile);
+         // const editor = await vscode.window.showTextDocument(document, { preview: false });
+
+         // Set a custom title for the editor tab
+         vscode.commands.executeCommand('vscode.openWith', document.uri, 'default', {
+               viewColumn: vscode.ViewColumn.One,
+               preserveFocus: true,
+               customTitle: fileName + ` (${this.config.label || this.host.split(".")[0]}${versionLabel})`
+         });
+         */
+
+         
+         /*
+         // Open the temporary file in the editor
+         const document = await vscode.workspace.openTextDocument({ content: this.fileContents[0], language: 'plaintext' });
+         const editor = await vscode.window.showTextDocument(document, { preview: false });
+         */
+
+         /*
+         const tempFileUri = vscode.Uri.parse('untitled:' + fileName);
+         // Set a custom title for the editor tab
+         vscode.commands.executeCommand('vscode.openWith', tempFileUri, 'default', {
+               viewColumn: vscode.ViewColumn.One,
+               preserveFocus: true,
+               customTitle: fileName + ` (${this.config.label || this.host.split(".")[0]}${versionLabel})`
+         });
+         */
+         
+         /*
+         // Listen for the editor closing
+         const documentCloseListener = vscode.workspace.onDidCloseTextDocument(async (document) => {
+            console.log(`Closing document URI: ${document.uri.toString()}`);
+            let normDocPath = path.normalize(document.uri.fsPath);
+            let normTempFile = path.normalize(tempFile.name);
+            if ( // os.platform() === 'win32' &&
+               fs.existsSync(normTempFile.toLowerCase()) &&
+               fs.existsSync(normTempFile.toUpperCase())
+            ) {
+               // console.log('FileSystem is case-insensitive!');
+               normDocPath = normDocPath.toLowerCase();
+               normTempFile = normTempFile.toLowerCase();
+            }
+            // If the document being closed is the temp file, delete it
+            if (normDocPath === normTempFile) {
+               // Change permissions to writable (0o666 allows read and write for all users)
+               try {
+                  await fs.promises.chmod(tempFile.name, 0o666);
+                  // console.log(`File permissions changed to writable: ${this.tempFile.name}`);
+               } catch (error) {
+                  console.error(`Error: ${error.message}`);
+               }
+               // Delete the temporary file
+               tempFile.removeCallback();
+               // Clean up listener
+               documentCloseListener.dispose();
+            }
+         });
+         */
+
+      } catch(err) {
+         console.error(`Error: ${err.message}`);
+         vscode.window.showErrorMessage(`Error: ${err.message}`)
+      }
+   }
 
    async compareFileContents() {
       // Write the remote file to a local temporary file
@@ -717,14 +892,14 @@ export class RestApi {
                   if (normDocPath === normTempFile) {
                      // Change permissions to writable (0o666 allows read and write for all users)
                      try {
-                        await fs.promises.chmod(this.tempFile.name, 0o666);
+                        await fs.promises.chmod(tempFile.name, 0o666);
                         // console.log(`File permissions changed to writable: ${this.tempFile.name}`);
                      } catch (error) {
                         console.error(`Error: ${error.message}`);
                      }
                      // Delete the temporary file
-                     this.tempFile.removeCallback();
-                     this.tempFile = null;
+                     tempFile.removeCallback();
+                     this.tempFiles[i] = null;
                      // Clean up listener
                      documentCloseListener.dispose();
                   }
@@ -830,6 +1005,30 @@ export class RestApi {
          console.log('formdata:', formdata);
       }
       return [formdata, filename];
+   }
+
+   getRemoteFilePath(){
+      if (! this.localFile || ! this.config || this.config.localRootPath == null || ! this.config.remoteEndpoint) {
+         console.warn(`(RestApi.getRemoteFilePath): Invalid localFile: ${this.localFile} and/or config: ${this.config}`);
+         return;
+      }
+      const workingWSFolder = vscode.workspace.getWorkspaceFolder(
+         (this.localFile instanceof vscode.Uri) ?
+         this.localFile :
+         vscode.Uri.file(this.localFile)
+      );
+      const remoteFile = this.localFile
+         .replace(/\\/g, "/")
+         .replace(
+            workingWSFolder.uri.fsPath.replace(/\\/g, "/") + this.config.localRootPath,
+            ""
+         );
+      console.log('remoteFile:', remoteFile);
+      this.remoteFile = remoteFile;
+      console.log('this.remoteFile:', this.remoteFile);
+
+      const url = new URL(this.config.remoteEndpoint.url);
+      this.host = url.hostname;
    }
 
    async uploadFile(param) {
@@ -1010,17 +1209,27 @@ export async function restApiUpload(param) {
 
 console.log('typeof restApiUpload:', typeof restApiUpload);
 
-export async function restApiCompare(param) {
+export async function restApiCompare(param, config = null) {
    const restApi = new RestApi();
    if (typeof param === 'string') {
       param = vscode.Uri.file(param);
    }
    try {
-      await restApi.getEndPointConfig(param); // based on the passed Uri (if defined)
-      // otherwise based on the path of the local file open in the active editor
-      // also sets remoteFile
-      if (!restApi.config) {
-         return;
+      if (config) {
+         restApi.config = config;
+         if (param instanceof vscode.Uri) {
+            console.log('(getEndPointConfig) param:', param);
+            restApi.localFile = param.fsPath;
+            restApi.localFileStat = await vscode.workspace.fs.stat(param);
+            restApi.getRemoteFilePath();   // get Remote File Path
+         }
+      } else {
+         await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
+                                                   // otherwise based on the path of the local file open in the active editor
+                                                   // also sets remoteFile
+         if (!restApi.config) {
+            return;
+         }
       }
       await restApi.getRemoteFileContents();
       await restApi.compareFileContents();
@@ -1029,6 +1238,71 @@ export async function restApiCompare(param) {
    }
 }
 console.log('typeof restApiCompare:', typeof restApiCompare);
+
+
+export async function restApiDownload(param, config = null) {
+   const restApi = new RestApi();
+   if (typeof param === 'string') {
+      param = vscode.Uri.file(param);
+   }
+   try {
+      if (config) {
+         restApi.config = config;
+         if (param instanceof vscode.Uri) {
+            console.log('(getEndPointConfig) param:', param);
+            restApi.localFile = param.fsPath;
+            // restApi.localFileStat = await vscode.workspace.fs.stat(param);
+            restApi.getRemoteFilePath();   // get Remote File Path
+         }
+      } else {
+         await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
+                                                   // otherwise based on the path of the local file open in the active editor
+                                                   // also sets remoteFile
+         if (!restApi.config) {
+            return;
+         }
+      }
+      const pick_multiple = false;
+      await restApi.getRemoteFileContents(param, pick_multiple);
+      await restApi.saveFileContentsAs(param.fsPath);
+   } catch (err) {
+      console.log(err);
+   }
+}
+console.log('typeof restApiCompare:', typeof restApiCompare);
+
+// restApiView
+
+export async function restApiView(param, config = null) {
+   const restApi = new RestApi();
+   if (typeof param === 'string') {
+      param = vscode.Uri.file(param);
+   }
+   try {
+      if (config) {
+         restApi.config = config;
+         if (param instanceof vscode.Uri) {
+            console.log('(getEndPointConfig) param:', param);
+            restApi.localFile = param.fsPath;
+            // restApi.localFileStat = await vscode.workspace.fs.stat(param);
+            restApi.getRemoteFilePath();   // get Remote File Path
+         }
+      } else {
+         await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
+                                                   // otherwise based on the path of the local file open in the active editor
+                                                   // also sets remoteFile
+         if (!restApi.config) {
+            return;
+         }
+      }
+      await restApi.getRemoteFileContents();
+      await restApi.viewFileContents();
+   } catch (err) {
+      console.log(err);
+   }
+}
+console.log('typeof restApiView:', typeof restApiView);
+
 
 
 export async function restApiProperties(param) {
