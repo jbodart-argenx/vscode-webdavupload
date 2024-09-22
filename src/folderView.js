@@ -1,6 +1,8 @@
 const vscode = require("vscode");
 const path = require('path');
+const fs = require('fs');
 const isBinaryFile = require("isbinaryfile").isBinaryFile;
+const { restApiCompare, restApiDownload, restApiView } = require('./rest-api');
 const { openFile } = require('./openFile');
 
 export async function showFolderView(folderPath, folderContents, isLocal, config) {
@@ -30,13 +32,51 @@ export async function showFolderView(folderPath, folderContents, isLocal, config
                const fileUri = vscode.Uri.file(message.filePath);
                const ext = path.extname(message.filePath).toLowerCase();
                try {
-                  if (config?.remoteEndpoint?.url) {
+                  if (config?.remoteEndpoint?.url && config?.workspaceFolder) { // Remote folder
+                     const remotePathPrefix = new URL(config.remoteEndpoint.url).pathname.replace(/\/lsaf\/webdav\/(work|repo)(?=\/)/, '').replace(/\/$/, '');
+                     const localPath = path.join(config.workspaceFolder?.uri?.fsPath || config.workspaceFolder,
+                        config?.localRootPath,
+                        `|${message.filePath}`.replace(`|${remotePathPrefix}`, '').replace('|', '')
+                     );
+                     let localPathExists = false;
+                     try {
+                        await fs.promises.stat(localPath);
+                        localPathExists = true;
+                        console.log(`localPath exists: ${localPath}`);
+                     } catch (error) {
+                        console.log(`localPath does not exist: ${localPath}`);
+                     } 
+                     const actions = ['View'];
+                     if (localPathExists) {
+                        actions.push('Download (overwrite) ⚠');
+                        actions.push('Compare Local to Remote');
+                     } else { 
+                        actions.push('Download (new)')
+                     }
                      // Ask what to do with remote file: download, compare to local, delete ?
-                     const action = await vscode.window.showQuickPick(['View', 'Download', 'Compare to Local']);
-                     const msg = `Action not yet implemented: ${action} for ${config.label} remote file: ${message.filePath}`;
-                     console.log(msg);
-                     vscode.window.showWarningMessage(msg);
-                  } else {
+                     const action = await vscode.window.showQuickPick(actions,
+                        {
+                           title: `Choose action for ${config.label} ${message.filePath}`,
+                           placeHolder: "",
+                           canPickMany: false,
+                           ignoreFocusOut: false
+                        });
+                     if (!action) {
+                        return;
+                     }
+                     if (action === 'Compare Local to Remote') {
+                        return restApiCompare(localPath, config);
+                     } else if (action.split(' ')[0] === 'Download') {
+                        return restApiDownload(localPath, config, /overwrite/i.test(action));
+                     } else if (action === 'View') {
+                        return restApiView(localPath, config);
+                     } else {
+                        const msg = `Action not yet implemented: ${action} for ${config.label} remote file: ${message.filePath}`;
+                        console.log(msg);
+                        vscode.window.showWarningMessage(msg);
+                     };
+                  } else {  // Local folder
+                     // Local file action (default: 'Open')
                      switch (ext) {
                         case '.docx':
                         case '.html':
@@ -56,7 +96,6 @@ export async function showFolderView(folderPath, folderContents, isLocal, config
                               const document = await vscode.workspace.openTextDocument(fileUri);
                               vscode.window.showTextDocument(document);
                            } else {
-                              // vscode.commands.executeCommand('vscode.open', fileUri);
                               openFile(fileUri);
                            }
                            break;
@@ -176,13 +215,13 @@ function getWebviewContent(folderPath, isLocal, files, config) {
                      shouldSwitch = false;
                      x = rows[i].getElementsByTagName("TD")[n];
                      y = rows[i + 1].getElementsByTagName("TD")[n];
-                     xVal = x.textContent.trim().toLowerCase();
-                     yVal = y.textContent.trim().toLowerCase();
+                     xVal = (x?.textContent || '').trim().toLowerCase();
+                     yVal = (y?.textContent || '').trim().toLowerCase();
 
                      // Check if both values are numeric
-                     const xNum = parseFloat(xVal);
-                     const yNum = parseFloat(yVal);
-                     const bothNumeric = !isNaN(xNum) && !isNaN(yNum)  && !xVal.match(/[t:]/i);                     
+                     const xNum = xVal === '' ? -1 : parseFloat(xVal);
+                     const yNum = yVal === '' ? -1 : parseFloat(yVal);
+                     const bothNumeric = !isNaN(xNum) && !isNaN(yNum)  && !xVal.match(/[^\\d]/i);                     
 
                      if (dir === "asc") {
                         if (bothNumeric) {
