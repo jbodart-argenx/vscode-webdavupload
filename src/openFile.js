@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const os = require('os');
 const { exec } = require('child_process');
 
 function openFileWithDefaultApp(filePath) {
@@ -8,11 +9,15 @@ function openFileWithDefaultApp(filePath) {
       filePath = decodeURIComponent(vscode.Uri.parse(filePath).fsPath);
    }
    console.log('filePath:', filePath);
-   exec(`start "" "${filePath}"`, (error) => {
-      if (error) {
-         console.error('Error opening file:', error);
-      }
-   });
+   if (os.platform() === 'win32'){
+      exec(`start "" "${filePath}"`, (error) => {
+         if (error) {
+            console.error('Error opening file:', error);
+         }
+      });
+   } else {
+      vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath));
+   }
 }
 
 export function openFile(uri) {
