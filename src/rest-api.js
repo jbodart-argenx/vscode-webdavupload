@@ -267,20 +267,24 @@ export class RestApi {
             });
             selectedVersions = await vscode.window.showQuickPick(allVersions,
                { canPickMany: pick_multiple, title: 'Select a version', placeHolder: allVersions[0].label, ignoreFocusOut: true, });
-            if (!!pick_multiple) {
+            if (pick_multiple) {
                selectedVersion = selectedVersions[0];
                //compareVersion = selectedVersions[1];
                //console.log('compareVersion:', compareVersion);
+            } else {
+               selectedVersions = [selectedVersions];
+               selectedVersion = selectedVersions[0];
             }
          } else {
-            selectedVersions = [selectedVersions];
+            console.warn("Unexpected results: versions = ", versions);
+            selectedVersions = [''];
             selectedVersion = selectedVersions[0];
          }
       } else {
          selectedVersions = [''];
          selectedVersion = selectedVersions[0];
       }
-      console.log('selectedVersion:', selectedVersion);
+      console.log('selectedVersion:\n', selectedVersion);
 
       this.fileContents = [];
       this.fileVersions = [];
@@ -641,7 +645,7 @@ export class RestApi {
       }
    };
 
-   async saveFileContentsAs(outFile) {
+   async saveFileContentsAs(outFile, overwrite = null) {
       if (! Array.isArray(this.fileContents)) {
          this.fileContents = [this.fileContents];
       }
@@ -684,8 +688,32 @@ export class RestApi {
       }
       try {
          if (outFile && this.fileContents[0] != null) {
+            let outFileExists = false;
+            try {
+               await fs.promises.stat(outFile);
+               outFileExists = true;
+               console.log(`outFile exists: ${outFile}`);
+            } catch (error) {
+               console.log(`outFile does not exist: ${outFile}`);
+            }
+            if (outFileExists) {
+               if (overwrite == null) {
+                  const choice = await vscode.window.showWarningMessage(
+                     `File exists: ${outFile}`, 
+                     { modal: true},
+                     "Overwrite"
+                  );
+                  overwrite = (choice === "Overwrite");
+               }
+               if (! overwrite) {
+                  console.warn(`Existing file NOT overwritten: ${outFile}`);
+                  vscode.window.showWarningMessage(`Existing file NOT overwritten: ${outFile}`);
+                  return;
+               } 
+            }
             await fs.promises.writeFile(outFile, this.fileContents[0]);
-            console.log(`Downloaded as ${outFile}`);
+            console.log(`Saved as ${outFile}`);
+            vscode.window.showInformationMessage(`Saved as ${outFile}.`)
          }
       } catch (err) {
          console.error(`Error: ${err.message}`);
@@ -1240,7 +1268,7 @@ export async function restApiCompare(param, config = null) {
 console.log('typeof restApiCompare:', typeof restApiCompare);
 
 
-export async function restApiDownload(param, config = null) {
+export async function restApiDownload(param, config = null, overwrite = null) {
    const restApi = new RestApi();
    if (typeof param === 'string') {
       param = vscode.Uri.file(param);
@@ -1264,12 +1292,12 @@ export async function restApiDownload(param, config = null) {
       }
       const pick_multiple = false;
       await restApi.getRemoteFileContents(param, pick_multiple);
-      await restApi.saveFileContentsAs(param.fsPath);
+      await restApi.saveFileContentsAs(param.fsPath, overwrite);
    } catch (err) {
       console.log(err);
    }
 }
-console.log('typeof restApiCompare:', typeof restApiCompare);
+console.log('typeof restApiDownload:', typeof restApiDownload);
 
 // restApiView
 
