@@ -7,6 +7,8 @@ export async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRe
    // Finds the first matching config file, if any, in the current directory, nearest ancestor, or user's home directory.
    const configFile = findConfig("webdav.json", { cwd: absoluteWorkingDir });
 
+   const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(absoluteWorkingDir));
+
    if (configFile == null) {
       vscode.window.showErrorMessage(
          "Endpoint config file for WebDAV (webdav.json) not found in current VScode root folder..."
@@ -96,6 +98,7 @@ export async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRe
          ...config,
          localRootPath: currentSearchPath,
          remoteEndpoint: endpointConfig,
+         workspaceFolder,
       }
       return config;
    }
