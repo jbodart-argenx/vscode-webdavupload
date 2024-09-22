@@ -4,6 +4,7 @@ const path = require("path");
 const { getMultiLineText: getMultiLineInput } = require('./multiLineText.js');
 const { fileMD5sum, fileMD5sumStripBom } = require('./md5sum.js');
 const isBinaryFile = require("isbinaryfile").isBinaryFile;
+const { openFile } = require("./openFile");
 
 const { URL } = require("url");
 const beautify = require("js-beautify");
@@ -288,6 +289,8 @@ export class RestApi {
 
       this.fileContents = [];
       this.fileVersions = [];
+      this.fileContentLength = [];
+      this.fileContentType = [];
 
       for (let i = 0; i < selectedVersions.length; i++) {
 
@@ -300,7 +303,8 @@ export class RestApi {
          try {
             const response = await fetch(apiUrl + apiRequest, requestOptions);
             const contentType = response.headers.get('content-type');
-            console.log('contentType:', contentType);
+            const contentLength = response.headers.get('content-length');
+            console.log('contentType:', contentType, 'contentLength:', contentLength);
             let result = null;
             let data = null;
             if (!response.ok) {
@@ -323,14 +327,26 @@ export class RestApi {
                }
                throw new Error(`HTTP error! ${result}`);
             }
-            const responseText = await response.text();
-            console.log("responseText", responseText);
-            this.fileContents.push(responseText);
-            this.fileVersions.push(selectedVersions[i]?.label || '');
+            if (contentLength && contentLength < 100_000_000) {
+               if (/^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
+                  || /^(application\/x-(httpd-php|perl|python|markdown|quarto|latex))/.test(contentType)) {
+                  const responseText = await response.text();
+                  this.fileContents.push(responseText);
+               } else  {
+                  // throw new Error(`File with content-length: ${contentLength} NOT downloaded given unexpected content-type: ${contentType}!`)
+                  const arrayBuffer = await response.arrayBuffer();
+                  this.fileContents.push(Buffer.from(arrayBuffer));
+               }
+               this.fileVersions.push(selectedVersions[i]?.label || '');
+               this.fileContentLength.push(contentLength);
+               this.fileContentType.push(contentType);
+            } else {
+               throw new Error(`File with content-type: ${contentType} NOT downloaded given unexpected content-length: ${contentLength}!`)
+            }
          } catch (error) {
             console.error("Error fetching Remote File Contents:", error);
             vscode.window.showErrorMessage("Error fetching Remote File Contents:", error.message);
-            this.fileContents.push(null);
+            this.fileContents.push(error.message);
             this.fileVersions.push(null);
          }
 
@@ -753,10 +769,17 @@ export class RestApi {
          }
          */
 
-         const fileName = this.remoteFile.slice(this.remoteFile.lastIndexOf("/") + 1);
+         // const fileName = this.remoteFile.slice(this.remoteFile.lastIndexOf("/") + 1);
+         const fileName = path.basename(this.remoteFile);
+         const ext = path.extname(fileName);
          const versionLabel = this.fileVersions[0] ? ` v${this.fileVersions[0]}` : '';
          const confLabel = `${(this.config.label || this.host.split(".")[0])}`.replace('/','-');
 
+         if (Buffer.isBuffer(this.fileContents[0])) {
+            const tempFile = tmp.fileSync({ postfix: ext, discardDescriptor: true });
+            await fs.promises.writeFile(tempFile.name, this.fileContents[0]);
+            openFile(vscode.Uri.file(tempFile.name));
+         } else {
             // Create a temporary file URI with a specific extension
             const tempFileUri = vscode.Uri.parse('untitled:' + `(${confLabel}${versionLabel}) ${fileName}`);
 
@@ -777,6 +800,8 @@ export class RestApi {
                customTitle: `(${this.config.label || this.host.split(".")[0]}${versionLabel}) ${fileName}`
             });
             */
+            
+         }
 
          /*
          // Open the temporary file in the editor
@@ -1277,7 +1302,6 @@ export async function restApiDownload(param, config = null, overwrite = null) {
       if (config) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
-            console.log('(getEndPointConfig) param:', param);
             restApi.localFile = param.fsPath;
             // restApi.localFileStat = await vscode.workspace.fs.stat(param);
             restApi.getRemoteFilePath();   // get Remote File Path
@@ -1391,14 +1415,23 @@ export async function restApiVersions(param) {
 console.log('typeof restApiVersions:', typeof restApiVersions);
 
 
-export async function restApiFolderContents(param) {
+export async function restApiFolderContents(param, _arg2, config = null) {
    const restApi = new RestApi();
    try {
-      await restApi.getEndPointConfig(param);     // based on the passed Uri (if defined)
-      // otherwise based on the path of the local file open in the active editor
-      // also sets remoteFile
-      if (!restApi.config) {
-         return;
+      if (config) {
+         restApi.config = config;
+         if (param instanceof vscode.Uri) {
+            console.log('(restApiFolderContents) param:', param);
+            restApi.localFile = param.fsPath;
+            restApi.getRemoteFilePath();   // get Remote File Path
+         }
+      } else {
+         await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
+                                                   // otherwise based on the path of the local file open in the active editor
+                                                   // also sets remoteFile
+         if (!restApi.config) {
+            return;
+         }
       }
       await restApi.getRemoteFolderContents(param);
       let folderContents = restApi.remoteFolderContents;
