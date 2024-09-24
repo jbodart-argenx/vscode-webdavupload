@@ -6,7 +6,7 @@
         "node": true
     },
     "parserOptions": {
-        "ecmaVersion": 2020,  // or 2017 or later to support async/await
+        "ecmaVersion": 2022,  // or 2017 or later to support async/await
         "ecmaFeatures": {
             "jsx": true
         },
