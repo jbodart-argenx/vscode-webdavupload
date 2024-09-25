@@ -175,10 +175,8 @@
         "js-beautify": "^1.15.1",
         "node-fetch": "^2.7.0",
         "path": "^0.12.7",
-        "q": "^1.5.1",
         "readable-stream": "^3.3.0",
         "strip-bom-buf": "^4.0.0",
-        "tmp": "0.1.0",
-        "underscore": "^1.13.1"
+        "tmp": "0.1.0"
     }
 }
