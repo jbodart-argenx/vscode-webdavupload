@@ -269,7 +269,8 @@ class RestApi {
             redirect: "follow",
          };
          try {
-            response = await fetch(apiUrl + apiRequest, requestOptions);
+            const fullUrl = encodeURI(apiUrl + apiRequest)
+            response = await fetch(fullUrl, requestOptions);
             contentType = response.headers.get('content-type');
             contentLength = response.headers.get('content-length');
             transferEncoding = response.headers.get('transfer-encoding');
@@ -319,10 +320,6 @@ class RestApi {
          } catch (error) {
             console.error("Error fetching Remote Folder Contents as Zip:", error);
             vscode.window.showErrorMessage("Error fetching Remote Folder Contents as Zip:", error.message);
-            /*
-            this.fileContents.push(error.message);
-            this.fileVersions.push(null);
-            */
          }
 
    };
@@ -394,7 +391,9 @@ class RestApi {
             redirect: "follow",
          };
          try {
-            const response = await fetch(apiUrl + apiRequest, requestOptions);
+            // const response = await fetch(apiUrl + apiRequest, requestOptions);
+            const fullUrl = encodeURI(apiUrl + apiRequest)
+            const response = await fetch(fullUrl, requestOptions);
             const contentType = response.headers.get('content-type');
             const contentLength = response.headers.get('content-length');
             console.log('contentType:', contentType, 'contentLength:', contentLength);
@@ -507,7 +506,9 @@ class RestApi {
          redirect: "follow",
       };
       try {
-         const response = await fetch(apiUrl + apiRequest, requestOptions);
+         // const response = await fetch(apiUrl + apiRequest, requestOptions);
+         const fullUrl = encodeURI(apiUrl + apiRequest)
+         const response = await fetch(fullUrl, requestOptions);
          const contentType = response.headers.get('content-type');
          console.log('contentType:', contentType);
          let result = null;
@@ -687,7 +688,9 @@ class RestApi {
          redirect: "follow",
       };
       try {
-         const response = await fetch(apiUrl + apiRequest, requestOptions);
+         // const response = await fetch(apiUrl + apiRequest, requestOptions);
+         const fullUrl = encodeURI(apiUrl + apiRequest)
+         const response = await fetch(fullUrl, requestOptions);
          const contentType = response.headers.get('content-type');
          console.log('contentType:', contentType);
          let result = null;
@@ -747,7 +750,9 @@ class RestApi {
          redirect: "follow",
       };
       try {
-         const response = await fetch(apiUrl + apiRequest, requestOptions);
+         // const response = await fetch(apiUrl + apiRequest, requestOptions);
+         const fullUrl = encodeURI(apiUrl + apiRequest)
+         const response = await fetch(fullUrl, requestOptions);
          const contentType = response.headers.get('content-type');
          console.log('contentType:', contentType);
          let result = null;
@@ -1261,9 +1266,9 @@ class RestApi {
          };
          // console.log(JSON.stringify(requestOptions));
          try {
-            const fullUrl = apiUrl + apiRequest
+            const fullUrl = encodeURI(apiUrl + apiRequest);
             console.log('fullUrl:', fullUrl);
-            let response = await fetch(apiUrl + apiRequest, requestOptions);
+            let response = await fetch(fullUrl, requestOptions);
             console.log('response.status:', response.status, response.statusText);
             // Check if there's a redirect (3xx status code)
             const maxRedirects = 20;
@@ -1404,7 +1409,8 @@ class RestApi {
       // await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
       await this.enterMultiLineComment(`Add / Update ${(this.localFile?.split(/[\\\/]/) ?? '...').slice(-1)}\n\n`);
       if (this.comment) {
-         apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
+         // apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
+         apiRequest = `${apiRequest}&comment=${this.comment}`;
       }
       apiRequest = `${apiRequest}&expand=item,status`;
       console.log('useEditorContents:', useEditorContents);
@@ -1423,10 +1429,26 @@ class RestApi {
          redirect: 'manual' // Handle redirection manually to prevent changing method to GET
       };
       // console.log(JSON.stringify(requestOptions));
+      let response;
       try {
          const fullUrl = apiUrl + apiRequest
          console.log('fullUrl:', fullUrl);
-         let response = await fetch(apiUrl + apiRequest, requestOptions);
+         const controller = new AbortController();
+         const timeout = 10_000;
+         const timeoutId = setTimeout(() => controller.abort(), timeout);
+         try {
+            const fullUrl = encodeURI(apiUrl + apiRequest)
+            response = await fetch(fullUrl, { ...requestOptions, signal: controller.signal });
+            clearTimeout(timeoutId); // clear timeout when the request completes
+         } catch (error) {
+            if (error.name === 'AbortError') {
+               console.error(`Fetch request timed out after ${timeout/1000} seconds.`);
+               throw new Error(`Fetch request timed out after ${timeout/1000} seconds.`);
+            } else {
+               console.error('Fetch request failed:', error);
+               throw new Error('Fetch request failed:', error.message);
+            }
+         }
          console.log('response.status:', response.status, response.statusText);
          // Check if there's a redirect (3xx status code)
          const maxRedirects = 20;
@@ -1453,6 +1475,7 @@ class RestApi {
                   response = await fetch(redirectUrl, requestOptions);
                } catch (error) {
                   console.log('error:', error);
+                  throw error;
                }
             }
             redirects += 1;
