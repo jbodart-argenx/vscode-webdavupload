@@ -1158,7 +1158,7 @@ class RestApi {
       if (filePath instanceof vscode.Uri) {
          filePath = filePath.fsPath;
       }
-      filePath = filePath || this.remoteFile;
+      filePath = filePath || this.localFile || this.remoteFile;
       console.log("filePath:", filePath);
       const formdata = new FormData();
       if (useEditorContents) {
@@ -1409,15 +1409,15 @@ class RestApi {
       // await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
       await this.enterMultiLineComment(`Add / Update ${(this.localFile?.split(/[\\\/]/) ?? '...').slice(-1)}\n\n`);
       if (this.comment) {
-         // apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
-         apiRequest = `${apiRequest}&comment=${this.comment}`;
+         apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
+         // apiRequest = `${apiRequest}&comment=${this.comment}`;
       }
       apiRequest = `${apiRequest}&expand=item,status`;
       console.log('useEditorContents:', useEditorContents);
       let formdata;
       let filename;
       let requestOptions;
-      [formdata, filename] = await this.getFormData(useEditorContents);
+      [formdata, filename] = await this.getFormData(useEditorContents, param);
       requestOptions = {
          method: "PUT",
          body: formdata,
@@ -1437,7 +1437,8 @@ class RestApi {
          const timeout = 10_000;
          const timeoutId = setTimeout(() => controller.abort(), timeout);
          try {
-            const fullUrl = encodeURI(apiUrl + apiRequest)
+            // const fullUrl = encodeURI(apiUrl + apiRequest);
+            const fullUrl = apiUrl + apiRequest;
             response = await fetch(fullUrl, { ...requestOptions, signal: controller.signal });
             clearTimeout(timeoutId); // clear timeout when the request completes
          } catch (error) {
@@ -1459,7 +1460,7 @@ class RestApi {
                console.log(`Response status: ${response.status} ${response.statusText}, Redirecting (${redirects}) to: ${redirectUrl}`);
                vscode.window.showInformationMessage(`Redirecting (${redirects}) to: ${redirectUrl}`);
                // re-create the formdata and file stream (they can only be used once!)
-               [formdata, filename] = await this.getFormData(useEditorContents);
+               [formdata, filename] = await this.getFormData(useEditorContents, param);
                requestOptions = {
                   method: "PUT",
                   body: formdata,

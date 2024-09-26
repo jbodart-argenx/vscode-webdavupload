@@ -41,7 +41,7 @@
 
 ## 0.0.9
 
-- Add sepaarte actions on local folder view, remote folder view and compared folders view
+- Add separate actions on local folder view, remote folder view and compared folders view
 - Add folder zip, upload and expand functionality
 - Add folder download as Zip, and download & expand functionality
 - Ignore FocusOut in showInputBox() calls
