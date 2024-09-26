@@ -37,6 +37,9 @@ export async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRe
          placeHolder: "Choose a remote location",
          canPickMany: false,
       });
+      if (selectedConfig == null) {
+         return;
+      }
       allEndpointsConfig =
          restApiConfig[
          configChoices.findIndex((config) => config === selectedConfig)
