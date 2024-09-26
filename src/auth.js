@@ -68,12 +68,19 @@ export async function getCredentials(key) {
 
 export async function askForCredentials(key) {
    try {
-      const username = await vscode.window.showInputBox({ prompt: "Username for " + key + " ?" });
+      const username = await vscode.window.showInputBox({ 
+         prompt: "Username for " + key + " ?",
+         ignoreFocusOut: true
+      });
       if (!username) {
          return(EMPTY_CREDENTIALS);
       }
 
-      const password = await vscode.window.showInputBox({ prompt: "Password ?", password: true });
+      const password = await vscode.window.showInputBox({ 
+         prompt: "Password ?", 
+         password: true ,
+         ignoreFocusOut: true
+      });
       if (!password) {
          return(EMPTY_CREDENTIALS);
       }
