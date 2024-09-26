@@ -9,9 +9,12 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 
 // REST API functions
 const { 
-    restApiVersions, restApiFolderContents, localFolderContents,
-    compareFolderContents, restApiCompare, restApiUpload, restApiProperties 
+    restApiVersions,
+    restApiCompare, restApiUpload, restApiProperties 
 } = require('./rest-api');
+
+const { localFolderContents, restApiFolderContents } = require('./folderView.js');
+const { compareFolderContents } = require('./twoFoldersView.js');
 
 
 console.log('extension.js - before require("./auth.js")');
