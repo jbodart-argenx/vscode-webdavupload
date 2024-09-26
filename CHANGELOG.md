@@ -38,3 +38,17 @@
 - Properly handle "View" action on remote binary files
 - Skip download of big remote files (>= 100 MB)
 - Distinguish local from remote file actions in 2 Folders Compare Views
+
+## 0.0.9
+
+- Add sepaarte actions on local folder view, remote folder view and compared folders view
+- Add folder zip, upload and expand functionality
+- Add folder download as Zip, and download & expand functionality
+- Ignore FocusOut in showInputBox() calls
+- Handle null values returned from vscode.window.showQuickPick()
+- Restructure modules to avoid cross-imports between modules
+- Use encodeURI() to deal with special characters (e.g. spaces in filenames) in URLs
+- Add 10sec timeout to PUT requests in uploadFile()
+- Implement multiple actions in showFolderView()
+- Add refresh button & action to getOneFolderWebviewContent()
+- Updated method getRemoteFileContents() to accept paths as strings and versions.items with single element, and content-type: application/x-sas

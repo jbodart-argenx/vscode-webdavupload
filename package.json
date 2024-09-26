@@ -2,7 +2,7 @@
     "name": "lsaf-rest-api",
     "displayName": "LSAF Rest API Upload",
     "description": "Compares & uploads local files to a remote LSAF host using Rest API",
-    "version": "0.0.8",
+    "version": "0.0.9",
     "publisher": "jbodart-argenx",
     "engines": {
         "vscode": "^1.16.0"
