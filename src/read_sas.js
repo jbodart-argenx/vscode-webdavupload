@@ -22,7 +22,18 @@ async function read_sas(sas7bdatFile){
 }
 
 
-module.exports = { webR, initWebR, read_sas };
+async function read_xpt(xptFile){
+   let datadir = path.dirname(xptFile);
+   console.log('datadir:', datadir);
+   await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
+   await webR.evalR(`data <- haven::read_xpt("/data/${path.basename(xptFile)}")`);
+   await webR.FS.unmount("/data");
+   let data_json = await webR.evalR(`jsonlite::toJSON(data)`);
+   let json = await data_json.toArray();
+   return JSON.parse(json);
+}
+
+module.exports = { webR, initWebR, read_sas, read_xpt };
 
 /*
 // example
