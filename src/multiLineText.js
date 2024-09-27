@@ -78,7 +78,7 @@ function getWebviewContent(defaultValue, title="File Upload Comment", header=und
    if (! header) header = `Enter ${title} below:`;
    const escapedTitle = title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
    const escapedHeader = header.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-   const escapedValue = defaultValue.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+   const escapedValue = `${defaultValue || ''}`.replace(/</g, '&lt;').replace(/>/g, '&gt;');
    const escapedButtonLabel = buttonLabel.replace(/</g, '&lt;').replace(/>/g, '&gt;');
    const readonly = editable ? "" : "readonly";
 
