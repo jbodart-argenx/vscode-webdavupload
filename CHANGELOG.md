@@ -57,3 +57,13 @@
 
 - Add "refresh" button in Compare Two Folders view
 - Package updates
+
+## 1.0.1
+
+- Handle non-versioned files as expected by LSAF REST API (set version='' instead of undefined)
+- Re-calculate currentSearchPath from endpointConfigDirectory and workspaceFolder
+- Show error message if config is null
+- Beautify console.log messages
+- Re-derive remoteFile from workingWSFolder and config.localRootPath
+- Ignore version information retrieved without a version number (i.e. non-versioned files)
+- In method getRemoteFilePath(), improve log messages when config is invalid
