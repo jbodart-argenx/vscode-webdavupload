@@ -2,6 +2,7 @@ const vscode = require("vscode");
 const fs = require("fs");
 const path = require("path");
 const findConfig = require("find-config");
+const beautify = require("js-beautify");
 
 export async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = false) {
    // Finds the first matching config file, if any, in the current directory, nearest ancestor, or user's home directory.
@@ -10,11 +11,13 @@ export async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRe
    const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(absoluteWorkingDir));
 
    if (configFile == null) {
+      console.warn(`(getEndpointConfigForCurrentPath) Endpoint config file webdav.json not found in current VScode root folder: ${absoluteWorkingDir}`);
       vscode.window.showErrorMessage(
          "Endpoint config file for WebDAV (webdav.json) not found in current VScode root folder..."
       );
       return null;
    }
+   console.log('configFile:', configFile);
    let restApiConfig;
    try {
       restApiConfig = JSON.parse(fs.readFileSync(configFile));
@@ -48,14 +51,12 @@ export async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRe
    } else {
       allEndpointsConfig = restApiConfig;
    }
-   console.log("allEndpointsConfig:", allEndpointsConfig);
+   console.log("allEndpointsConfig:\n", beautify(JSON.stringify(allEndpointsConfig)));
    console.log("configFile:", configFile);
 
    if (configFile != null && allEndpointsConfig) {
-      const endpointConfigDirectory = configFile.slice(
-         0,
-         configFile.lastIndexOf(path.sep)
-      );
+      // const endpointConfigDirectory = configFile.slice(0, configFile.lastIndexOf(path.sep));
+      const endpointConfigDirectory = path.dirname(configFile);
 
       const relativeWorkingDir = absoluteWorkingDir
          .slice(endpointConfigDirectory.length)
@@ -97,11 +98,17 @@ export async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRe
          }
       }
 
+      currentSearchPath = endpointConfigDirectory.replace(
+         workspaceFolder.uri.fsPath, ''
+      )
+
+
       config = {
          ...config,
          localRootPath: currentSearchPath,
          remoteEndpoint: endpointConfig,
          workspaceFolder,
+         configFile
       }
       return config;
    }
