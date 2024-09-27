@@ -52,3 +52,8 @@
 - Implement multiple actions in showFolderView()
 - Add refresh button & action to getOneFolderWebviewContent()
 - Updated method getRemoteFileContents() to accept paths as strings and versions.items with single element, and content-type: application/x-sas
+
+## 1.0.0
+
+- Add "refresh" button in Compare Two Folders view
+- Package updates
