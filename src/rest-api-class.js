@@ -351,7 +351,7 @@ class RestApi {
          if (Array.isArray(versions.items) && versions.items.length > 0) {
             const allVersions = versions.items.slice(0, MAX_ITEMS).map(item => {
                return ({
-                  label: `${item.version}`,
+                  label: `${item.version || ''}`,
                   description: `size: ${item.size}, created: ${item.created} by ${item.createdBy}`,
                   detail: item.comment
                })
