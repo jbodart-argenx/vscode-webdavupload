@@ -1,4 +1,6 @@
 const vscode = require("vscode");
+const { initWebR, webR } = require('./read_sas.js');
+
 console.log('Starting extension.js');
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
@@ -17,7 +19,7 @@ console.log('extension.js - before require("./auth.js")');
 const { initializeSecretModule, authTokens } = require('./auth.js');
 console.log('extension.js - after require("./auth.js")');
 
-function activate(context) {
+async function activate(context) {
 
     console.log('vscode-lsaf-rest-api starting extension activation!');
 
@@ -64,6 +66,9 @@ function activate(context) {
     context.subscriptions.push(restApiFolderContentsCommand);
     context.subscriptions.push(localFolderContentsCommand);
     context.subscriptions.push(compareFolderContentsCommand);
+
+    console.log('Starting webR...');
+    await initWebR(webR);
 
     console.log('vscode-lsaf-rest-api extension activated!');
 }
