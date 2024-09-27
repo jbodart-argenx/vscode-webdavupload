@@ -15,6 +15,9 @@ const FormData = require('form-data');
 const { Readable } = require('stream');
 const { streamToPromise } = require('./stream.js');
 const { pipeline } = require('stream/promises'); // Node.js v15+ only
+const { showMultiLineText } = require('./multiLineText.js');
+const { showTableView } = require('./json-table-view.js');
+const { read_sas, read_xpt } = require('./read_sas.js');
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
 
@@ -73,15 +76,12 @@ class RestApi {
          return;
       }
 
-      const workingDir = this.localFile.slice(0, this.localFile.lastIndexOf(path.sep));
+      const workingDir = path.dirname(this.localFile);
       console.log('(getEndPointConfig) workingDir:', workingDir);
 
       // Read configuration
       const config = await getEndpointConfigForCurrentPath(workingDir, onlyRepo);
 
-      if (config == null) {
-         return;
-      }
       if (!config) {
          vscode.window.showErrorMessage(
             "Configuration not found for the current path."
@@ -91,7 +91,7 @@ class RestApi {
          return;
       }
 
-      console.log("config:", config);
+      console.log("config:\n", beautify(JSON.stringify(config)));
       this.config = config;
 
       const workingWSFolder = vscode.workspace.getWorkspaceFolder(
@@ -100,13 +100,20 @@ class RestApi {
             (typeof param === 'string') ?
             vscode.Uri.file(param) :
             vscode.window.activeTextEditor.document.uri);
+      console.log("workingWSFolder:\n", beautify(JSON.stringify(workingWSFolder)));
 
       const remoteFile = this.localFile
          .replace(/\\/g, "/")
          .replace(
-            workingWSFolder.uri.fsPath.replace(/\\/g, "/") + config.localRootPath,
+            path.posix.join(workingWSFolder.uri.fsPath.replace(/\\/g, "/"), config.localRootPath.replace(/\\/g, "/")),
             ""
          );
+      // const remoteFile = this.localFile
+      //    .replace(/\\/g, "/")
+      //    .replace(
+      //       new URL(this.config.remoteEndpoint.url).pathname + config.localRootPath,
+      //       ""
+      //    );
       console.log('remoteFile:', remoteFile);
       this.remoteFile = remoteFile;
       console.log('this.remoteFile:', this.remoteFile);
@@ -348,7 +355,7 @@ class RestApi {
          await this.getRemoteFileVersions();
          let versions = this.fileVersions;
          const MAX_ITEMS = 30;
-         if (Array.isArray(versions.items) && versions.items.length > 0) {
+         if (Array.isArray(versions.items) && versions.items.filter(i => i.version).length > 0) {
             const allVersions = versions.items.slice(0, MAX_ITEMS).map(item => {
                return ({
                   label: `${item.version || ''}`,
@@ -367,7 +374,7 @@ class RestApi {
                selectedVersion = selectedVersions[0];
             }
          } else {
-            console.warn("Unexpected results: versions = ", versions);
+            console.log("Not versioned: versions = ", versions);
             selectedVersions = [''];
             selectedVersion = selectedVersions[0];
          }
@@ -420,8 +427,10 @@ class RestApi {
                throw new Error(`HTTP error! ${result}`);
             }
             if (contentLength && contentLength < 100_000_000) {
-               if (/^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
-                  || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))/.test(contentType)) {
+               if (
+                  /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
+                  || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
+               ) {
                   const responseText = await response.text();
                   this.fileContents.push(responseText);
                } else  {
@@ -905,9 +914,21 @@ class RestApi {
          const versionLabel = this.fileVersions[0] ? ` v${this.fileVersions[0]}` : '';
          const confLabel = `${(this.config.label || this.host.split(".")[0])}`.replace('/','-');
 
-         if (Buffer.isBuffer(this.fileContents[0])) {
+         if (Buffer.isBuffer(this.fileContents[0]) || /^application\/x-sas-xport(;|$)/.test(this.fileContentType)) {
             const tempFile = tmp.fileSync({ postfix: ext, discardDescriptor: true });
             await fs.promises.writeFile(tempFile.name, this.fileContents[0]);
+            if (/^application\/x-sas-data(;|$)/.test(this.fileContentType)) {
+               const data = await read_sas(tempFile.name);
+               console.log(beautify(JSON.stringify(data)));
+               showTableView(`Imported SAS data from ${confLabel} remote file: ${this.remoteFile}`, data);
+               showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from ${confLabel} remote file: ${this.remoteFile}`);
+            }
+            if (/^application\/x-sas-xport(;|$)/.test(this.fileContentType)) {
+               const data = await read_xpt(tempFile.name);
+               console.log(beautify(JSON.stringify(data)));
+               showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data);
+               showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from ${confLabel} remote file: ${this.remoteFile}`);
+            }
             openFile(vscode.Uri.file(tempFile.name));
          } else {
             // Create a temporary file URI with a specific extension
@@ -921,79 +942,9 @@ class RestApi {
             await editor.edit(editBuilder => {
                editBuilder.insert(new vscode.Position(0, 0), this.fileContents[0]);
             });
-
-            /*
-            // Set a custom title for the editor tab
-            vscode.commands.executeCommand('vscode.openWith', tempFileUri, 'default', {
-               viewColumn: vscode.ViewColumn.One,
-               preserveFocus: true,
-               customTitle: `(${this.config.label || this.host.split(".")[0]}${versionLabel}) ${fileName}`
-            });
-            */
             
          }
 
-         /*
-         // Open the temporary file in the editor
-         const normTempFile = path.normalize(tempFile.name);
-         const document = await vscode.workspace.openTextDocument(normTempFile);
-         // const editor = await vscode.window.showTextDocument(document, { preview: false });
-
-         // Set a custom title for the editor tab
-         vscode.commands.executeCommand('vscode.openWith', document.uri, 'default', {
-               viewColumn: vscode.ViewColumn.One,
-               preserveFocus: true,
-               customTitle: fileName + ` (${this.config.label || this.host.split(".")[0]}${versionLabel})`
-         });
-         */
-
-         
-         /*
-         // Open the temporary file in the editor
-         const document = await vscode.workspace.openTextDocument({ content: this.fileContents[0], language: 'plaintext' });
-         const editor = await vscode.window.showTextDocument(document, { preview: false });
-         */
-
-         /*
-         const tempFileUri = vscode.Uri.parse('untitled:' + fileName);
-         // Set a custom title for the editor tab
-         vscode.commands.executeCommand('vscode.openWith', tempFileUri, 'default', {
-               viewColumn: vscode.ViewColumn.One,
-               preserveFocus: true,
-               customTitle: fileName + ` (${this.config.label || this.host.split(".")[0]}${versionLabel})`
-         });
-         */
-         
-         /*
-         // Listen for the editor closing
-         const documentCloseListener = vscode.workspace.onDidCloseTextDocument(async (document) => {
-            console.log(`Closing document URI: ${document.uri.toString()}`);
-            let normDocPath = path.normalize(document.uri.fsPath);
-            let normTempFile = path.normalize(tempFile.name);
-            if ( // os.platform() === 'win32' &&
-               fs.existsSync(normTempFile.toLowerCase()) &&
-               fs.existsSync(normTempFile.toUpperCase())
-            ) {
-               // console.log('FileSystem is case-insensitive!');
-               normDocPath = normDocPath.toLowerCase();
-               normTempFile = normTempFile.toLowerCase();
-            }
-            // If the document being closed is the temp file, delete it
-            if (normDocPath === normTempFile) {
-               // Change permissions to writable (0o666 allows read and write for all users)
-               try {
-                  await fs.promises.chmod(tempFile.name, 0o666);
-                  // console.log(`File permissions changed to writable: ${this.tempFile.name}`);
-               } catch (error) {
-                  console.error(`Error: ${error.message}`);
-               }
-               // Delete the temporary file
-               tempFile.removeCallback();
-               // Clean up listener
-               documentCloseListener.dispose();
-            }
-         });
-         */
 
       } catch(err) {
          console.error(`Error: ${err.message}`);
@@ -1196,20 +1147,32 @@ class RestApi {
 
    getRemoteFilePath(){
       if (! this.localFile || ! this.config || this.config.localRootPath == null || ! this.config.remoteEndpoint) {
-         console.warn(`(RestApi.getRemoteFilePath): Invalid localFile: ${this.localFile} and/or config: ${JSON.stringify(this.config)}`);
-         return;
+         this.localFile = this.localFile || null;
+         this.config = this.config || null;
+         if (this.config) {
+            this.config.localRootPath = this.config.localRootPath || null;
+            this.config.remoteEndpoint = this.config.remoteEndpoint || null;
+         }
+         throw new Error(`(RestApi.getRemoteFilePath): Invalid localFile: ${this.localFile} and/or config: ${beautify(JSON.stringify(this.config))}`);
       }
       const workingWSFolder = vscode.workspace.getWorkspaceFolder(
          (this.localFile instanceof vscode.Uri) ?
          this.localFile :
          vscode.Uri.file(this.localFile)
       );
+      // const remoteFile = this.localFile
+      //    .replace(/\\/g, "/")
+      //    .replace(
+      //       workingWSFolder.uri.fsPath.replace(/\\/g, "/") + this.config.localRootPath,
+      //       ""
+      //    );
       const remoteFile = this.localFile
          .replace(/\\/g, "/")
          .replace(
-            workingWSFolder.uri.fsPath.replace(/\\/g, "/") + this.config.localRootPath,
+            path.posix.join(workingWSFolder.uri.fsPath.replace(/\\/g, "/"), this.config.localRootPath.replace(/\\/g, "/")),
             ""
          );
+
       console.log('remoteFile:', remoteFile);
       this.remoteFile = remoteFile;
       console.log('this.remoteFile:', this.remoteFile);
