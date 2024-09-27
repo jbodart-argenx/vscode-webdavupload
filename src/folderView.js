@@ -9,7 +9,8 @@ const { RestApi } = require('./rest-api-class');
 const { openFile } = require('./openFile');
 const beautify = require("js-beautify");
 const { showMultiLineText } = require('./multiLineText.js');
-
+const { showTableView } = require('./json-table-view.js');
+const { read_sas, read_xpt } = require('./read_sas.js');
 
 async function restApiFolderContents(param, _arg2, config = null) {
    const restApi = new RestApi();
@@ -17,7 +18,7 @@ async function restApiFolderContents(param, _arg2, config = null) {
       param = vscode.Uri.file(param);
    }
    try {
-      if (config) {
+      if (config && config.localRootPath && config.remoteEndpoint) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
             console.log('(restApiFolderContents) param:', param);
@@ -326,6 +327,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                            return restApiCompare(message.filePath, config);
                         } else if (action === 'Open') {
                            itemType = 'file';
+                           let data;
                            // Local file action (default: 'Open')
                            switch (ext) {
                               case '.docx':
@@ -338,6 +340,18 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                               case '.xls':
                               case '.rtf':
                                     openFile(fileUri);
+                                 break;
+                              case '.sas7bdat':
+                                 data = await read_sas(message.filePath);
+                                 console.log(beautify(JSON.stringify(data)));
+                                 showTableView(`Imported SAS data from local file: ${message.filePath}`, data);
+                                 showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
+                                 break;
+                              case '.xpt':
+                                 data = await read_xpt(message.filePath);
+                                 console.log(beautify(JSON.stringify(data)));
+                                 showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data);
+                                 showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
                                  break;
                               default:
                                  const isBinary = await isBinaryFile(message.filePath);
@@ -1004,6 +1018,7 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                   } else if (action === 'Compare to Remote') {
                      return restApiCompare(message.filePath, config);
                   } else if (action === 'Open') {
+                     let data;
                      switch (ext) {
                         case '.docx':
                         case '.html':
@@ -1015,6 +1030,18 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                         case '.xls':
                         case '.rtf':
                               openFile(fileUri);
+                           break;
+                        case '.sas7bdat':
+                           data = await read_sas(message.filePath);
+                           console.log(beautify(JSON.stringify(data)));
+                           showTableView(`Imported SAS data from local file: ${message.filePath}`, data);
+                           showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
+                           break;
+                        case '.xpt':
+                           data = await read_xpt(message.filePath);
+                           console.log(beautify(JSON.stringify(data)));
+                           showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data);
+                           showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
                            break;
                         default:
                            const isBinary = await isBinaryFile(message.filePath);
