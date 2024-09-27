@@ -57,3 +57,8 @@
 
 - Add "refresh" button in Compare Two Folders view
 - Package updates
+
+## 1.1.0
+
+- Add import of .sas7bdat and .xpt files using webR and haven package
+- Dispaly imported tabular data as JSON and with new showTableView() function
