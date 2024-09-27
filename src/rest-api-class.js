@@ -1240,7 +1240,7 @@ class RestApi {
             .replace(/\/$/, '')
             ;
          console.log('urlPath:', urlPath)
-         const filePath = this.remoteFile;
+         const filePath = `${this.remoteFile}`.replace(/[\/\\]+$/, '');  // remove any trailing (back)slash(es)
          console.log('filePath:', filePath);
          let apiRequest = `${urlPath}${filePath}?action=uploadandexpand&createParents=true&overwrite=true`;
          // await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
