@@ -24,7 +24,7 @@ async function restApiZipUploadAndExpand(param, config = null) {
    if (param instanceof vscode.Uri) {
       vscode.window.showInformationMessage(`Rest API: Zip, Upload and Expanding Local Folder URI: ${param.fsPath}`);
       try {
-         if (config) {
+         if (config && config.localRootPath && config.remoteEndpoint) {
             restApi.config = config;
             if (param instanceof vscode.Uri) {
                console.log('(restApiZipUploadAndExpand) param:', param);
@@ -111,10 +111,10 @@ async function restApiCompare(param, config = null) {
       param = vscode.Uri.file(param);
    }
    try {
-      if (config) {
+      if (config && config.localRootPath && config.remoteEndpoint) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
-            console.log('(restApiCompare) param:', param);
+            console.log('(restApiCompare) param:', param, 'config:', config);
             restApi.localFile = param.fsPath;
             restApi.localFileStat = await vscode.workspace.fs.stat(param);
             restApi.getRemoteFilePath();   // get Remote File Path
@@ -144,6 +144,7 @@ async function restApiCompare(param, config = null) {
          });
    } catch (err) {
       console.log(err);
+      vscode.window.showErrorMessage(err.message);
    }
    statusMessage?.dispose();
 }
@@ -158,7 +159,7 @@ async function restApiDownloadFolderAsZip(param, config = null, expand = null, o
       param = vscode.Uri.file(param);
    }
    try {
-      if (config) {
+      if (config && config.localRootPath && config.remoteEndpoint) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
             restApi.localFile = param.fsPath;
@@ -262,7 +263,7 @@ async function restApiDownload(param, config = null, overwrite = null) {
       param = vscode.Uri.file(param);
    }
    try {
-      if (config) {
+      if (config && config.localRootPath && config.remoteEndpoint) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
             restApi.localFile = param.fsPath;
@@ -294,7 +295,7 @@ async function restApiView(param, config = null) {
       param = vscode.Uri.file(param);
    }
    try {
-      if (config) {
+      if (config && config.localRootPath && config.remoteEndpoint) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
             console.log('(restApiView) param:', param);
