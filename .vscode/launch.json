@@ -15,7 +15,11 @@
             ],
             "preLaunchTask": "npm: compile", // "npm: build",  // Build before launching tests
             "sourceMaps": true,  // Enable source maps for debugging
-            //"trace": "verbose"   // Optional: useful for debugging if needed
+            //"trace": "verbose",   // Optional: useful for debugging if needed
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/",
+                "!/node_modules/**"
+            ],
         },
         {
             "name": "Launch Tests",
@@ -30,7 +34,11 @@
                 "${workspaceFolder}/dist/**/*.js"  // Ensure this points to your test output files
             ],
             "preLaunchTask": "npm: compile", // "npm: build",  // Build before launching tests
-            "sourceMaps": true
+            "sourceMaps": true,
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/",
+                "!/node_modules/**"
+            ],
         }
     ]
 }
