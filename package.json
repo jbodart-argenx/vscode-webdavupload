@@ -144,7 +144,9 @@
         "vscode:prepublish": "npm run package",
         "package": "npm run check-types && node esbuild.js --production",
         "vsce": "npx vsce package",
-        "start": "code --extensionDevelopmentPath=$PWD"
+        "start": "code --extensionDevelopmentPath=$PWD",
+        "test-read_sas": "cd ./test && node ./read_sas.test.js"
+
     },
     "homepage": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/blob/master/README.md",
     "bugs": {
