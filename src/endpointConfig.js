@@ -4,7 +4,7 @@ const path = require("path");
 const findConfig = require("find-config");
 const beautify = require("js-beautify");
 
-export async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = false) {
+async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = false) {
    // Finds the first matching config file, if any, in the current directory, nearest ancestor, or user's home directory.
    const configFile = findConfig("webdav.json", { cwd: absoluteWorkingDir });
 
@@ -113,3 +113,5 @@ export async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRe
       return config;
    }
 }
+
+module.exports = { getEndpointConfigForCurrentPath };

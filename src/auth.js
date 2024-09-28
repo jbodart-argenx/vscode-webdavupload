@@ -1,19 +1,19 @@
 const vscode = require("vscode");
 
 // Global variable to store authentication tokens (in memory only)
-export const authTokens = {};
+const authTokens = {};
 
-export function setAuthTokens (key, value) {
+function setAuthTokens (key, value) {
    authTokens[key] = value;
 }
 let secretStorage;
 
 // Initialize the secret module with SecretStorage from the activate function
-export function initializeSecretModule(storage) {
+function initializeSecretModule(storage) {
    secretStorage = storage;
 }
 
-export class CredentialStore{
+class CredentialStore{
    constructor(){
       this.app = 'jbodart-argenx.lsaf-rest-api';
    }
@@ -41,17 +41,17 @@ export class CredentialStore{
    }
 }
 
-export const credStore = new CredentialStore();
+const credStore = new CredentialStore();
 
 
-export const EMPTY_CREDENTIALS = {
+const EMPTY_CREDENTIALS = {
    newCredentials: true,
    _username: "",
    _password: "",
 };
 
 
-export async function getCredentials(key) {
+async function getCredentials(key) {
    let credentials;
    try {
       credentials = await credStore.GetCredential(key);
@@ -66,7 +66,7 @@ export async function getCredentials(key) {
    }         
 }
 
-export async function askForCredentials(key) {
+async function askForCredentials(key) {
    try {
       const username = await vscode.window.showInputBox({ 
          prompt: "Username for " + key + " ?",
@@ -95,6 +95,11 @@ export async function askForCredentials(key) {
    }
 }
 
-export async function storeCredentials(key, username, password) {
+async function storeCredentials(key, username, password) {
    await credStore.SetCredential(key, username, password);
 }
+
+module.exports = { 
+   storeCredentials, askForCredentials, getCredentials, EMPTY_CREDENTIALS, credStore, CredentialStore,
+   initializeSecretModule, setAuthTokens, authTokens
+};

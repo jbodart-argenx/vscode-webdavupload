@@ -1,7 +1,7 @@
-import * as vscode from "vscode";
+// import * as vscode from "vscode";
+const vscode = require("vscode");
 
-
-export async function showTableView(tableViewTitle, data) {
+async function showTableView(tableViewTitle, data) {
 
    const panel = vscode.window.createWebviewPanel(
       "tableView",
@@ -116,3 +116,6 @@ function getJsonTableWebviewContent(filePath, jsonData) {
       </html>
    `;
 }
+
+
+module.exports = { showTableView };

@@ -20,7 +20,7 @@ function openFileWithDefaultApp(filePath) {
    }
 }
 
-export function openFile(uri) {
+function openFile(uri) {
    if (uri && uri.scheme) {
       openFileWithDefaultApp(uri.toString());
       return;
@@ -34,3 +34,5 @@ export function openFile(uri) {
 
    vscode.window.showInformationMessage('No editor is active. Select an editor or a file in the Explorer view.');
 }
+
+module.exports = { openFile };

@@ -3,7 +3,7 @@ const path = require("path");
 const Zip = require("adm-zip");
 
 // Function to create a zip file and add files/folders to a subdirectory in the zip
-export function createZip(zipFilePath /*: string*/, filesAndFolders /*: string[]*/, subdirectory = '' /*: string*/) /*: Promise<void>*/ {
+function createZip(zipFilePath /*: string*/, filesAndFolders /*: string[]*/, subdirectory = '' /*: string*/) /*: Promise<void>*/ {
    return new Promise((resolve, reject) => {
       try {
          const zip = new Zip();
@@ -38,7 +38,7 @@ export function createZip(zipFilePath /*: string*/, filesAndFolders /*: string[]
 }
 
 // Function to extract a zip file to a specified folder
-export function extractZip(zipFilePath /*: string*/, extractToPath /*: string*/, overwrite = true) /*: Promise<void>*/ {
+function extractZip(zipFilePath /*: string*/, extractToPath /*: string*/, overwrite = true) /*: Promise<void>*/ {
    return new Promise((resolve, reject) => {
       try {
          const zip = new Zip(zipFilePath);
@@ -49,3 +49,5 @@ export function extractZip(zipFilePath /*: string*/, extractToPath /*: string*/,
       }
    });
 }
+
+module.exports = { createZip, extractZip };
