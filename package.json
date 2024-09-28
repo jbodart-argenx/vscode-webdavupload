@@ -142,7 +142,9 @@
         "watch:esbuild": "node esbuild.js --watch",
         "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
         "vscode:prepublish": "npm run package",
-        "package": "npm run check-types && node esbuild.js --production"
+        "package": "npm run check-types && node esbuild.js --production",
+        "vsce": "npx vsce package",
+        "start": "code --extensionDevelopmentPath=$PWD"
     },
     "homepage": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/blob/master/README.md",
     "bugs": {
@@ -163,6 +165,7 @@
         "eslint": "^8.2.0",
         "ts-loader": "^9.2.6",
         "typescript": "^3.4.3",
+        "vsce": "^2.15.0",
         "webpack": "^5.63.0",
         "webpack-cli": "^4.9.1"
     },
