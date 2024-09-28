@@ -62,3 +62,9 @@
 
 - Add import of .sas7bdat and .xpt files using webR and haven package
 - Dispaly imported tabular data as JSON and with new showTableView() function
+
+## 1.1.1
+
+- Use webpack to fix issues with webR bundling
+- Replace node-fetch with axios and fix strange error: fetch is not a function
+- Use commonJS-style exports for consistency
