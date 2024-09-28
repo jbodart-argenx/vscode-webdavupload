@@ -8,9 +8,6 @@ const { openFile } = require("./openFile");
 
 const { URL } = require("url");
 const beautify = require("js-beautify");
-const fetch = require("node-fetch");   // Node.js equivalent to native Browser fetch 
-                                       // need to stick to version 2.x (CommonJS)
-                                       // since version 3.x uses ESM 
 const FormData = require('form-data');
 const { Readable } = require('stream');
 const { streamToPromise } = require('./stream.js');
@@ -18,6 +15,7 @@ const { pipeline } = require('stream/promises'); // Node.js v15+ only
 const { showMultiLineText } = require('./multiLineText.js');
 const { showTableView } = require('./json-table-view.js');
 const { read_sas, read_xpt } = require('./read_sas.js');
+const axios = require('axios');
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
 
@@ -131,23 +129,23 @@ class RestApi {
          this.encryptedPassword = null;
          return;
       }
-      if (password.toString().slice(0, 4) === '{P21}') {
+      if (password.toString().slice(0, 5) === '{P21}') {
          this.encryptedPassword = password; // already encrypted
          return;
       }
-      const requestOptions = {
-         method: "GET",
-         headers: {
-            "Authorization": "Basic " + btoa(this.username + ":" + password)
-         },
-         redirect: "follow",
-      };
       try {
-         const response = await fetch(url, requestOptions);
-         if (!response.ok) {
+         const response = await axios.get(url, {
+            headers: {
+               'Authorization': 'Basic ' + Buffer.from(this.username + ':' + password).toString('base64')
+            },
+            maxRedirects: 5 // Optional, axios follows redirects by default
+         });
+
+         if (response.status !== 200) {
             throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
          }
-         const result = await response.text();
+
+         const result = response.data;
          console.log('(encryptPassword) result:', result);
          this.encryptedPassword = result;
       } catch (error) {
@@ -159,16 +157,14 @@ class RestApi {
       if (this.host && authTokens[this.host]) {
          // Check that token is still valid
          const url = `https://${this.host}/lsaf/api/workspace/folders/?component=children`;
-         const requestOptions = {
-            method: "GET",
-            headers: { "X-Auth-Token": authTokens[this.host] },
-            redirect: "follow",
-         };
          try {
-            const response = await fetch(url, requestOptions);
+            const response = await axios.get(url, {
+               headers: { "X-Auth-Token": authTokens[this.host] },
+               maxRedirects: 5 // Optional, axios follows redirects by default
+            });
             if (response.status !== 401) {
                console.log(response.status, response.statusText);
-               if (response.ok) {
+               if (response.status === 200) {
                   this.authToken = authTokens[this.host];
                   console.log(`Reusing stored Auth Token for host ${this.host}: ${this.authToken}`);
                   return;
@@ -177,8 +173,8 @@ class RestApi {
                   response.headers.forEach((value, name) => {
                      console.log(`${name}: ${value}`);
                   });
-                  if (response.headers.get('content-type').match(/\bjson\b/)) {
-                     const data = await response.json();
+                  if (response.header['content-type'].match(/\bjson\b/)) {
+                     const data = response.data;
                      console.log(beautify(JSON.stringify(data), {
                         indent_size: 2,
                         space_in_empty_paren: true,
@@ -202,31 +198,33 @@ class RestApi {
          }
       }
       const url = `https://${this.host}/lsaf/api/logon`;
-      const requestOptions = {
-         method: "POST",
-         headers: {
-            "Authorization": "Basic " + btoa(this.username + ":" + this.encryptedPassword)
-         },
-         // redirect: "follow",
-         redirect: 'manual' // Handle redirection manually to prevent changing method to GET
-      };
       try {
-         let response = await fetch(url, requestOptions);
+         let response = await axios.post(url, {}, {
+            headers: {
+               "Authorization": "Basic " + Buffer.from(this.username + ":" + this.encryptedPassword).toString('base64')
+            },
+            maxRedirects: 0 // Handle redirection manually
+         });
          // Check if there's a redirect (3xx status code)
          const maxRedirects = 20;
          let redirects = 1;
          while (response.status >= 300 && response.status < 400 && redirects < maxRedirects) {
-            const redirectUrl = response.headers.get('location');
+            const redirectUrl = response.headers['location'];
             if (redirectUrl) {
                console.log(`Response status: ${response.status} ${response.statusText}, Redirecting (${redirects}) to: ${redirectUrl}`);
                vscode.window.showInformationMessage(`Redirecting (${redirects}) to: ${redirectUrl}`);
                // Perform the request again at the new location
-               response = await fetch(redirectUrl, requestOptions);
+               response = await axios.post(redirectUrl, {}, {
+                  headers: {
+                     "Authorization": "Basic " + Buffer.from(this.username + ":" + this.encryptedPassword).toString('base64')
+                  },
+                  maxRedirects: 0 // Handle redirection manually
+               });
             }
             redirects += 1;
          }
-         if (response.ok) {
-            const authToken = response.headers.get("x-auth-token");
+         if (response.status === 200) {
+            const authToken = response.headers["x-auth-token"];
             console.log("authToken", authToken, "response", response);
             this.authToken = authToken;
             console.log(`Storing Auth Token for host ${this.host}: ${this.authToken}`);
@@ -240,7 +238,7 @@ class RestApi {
             );
          } else {
             console.log(`${response.status} ${response.statusText}`);
-            const text = await response.text();
+            const text = response.data;
             console.log('response text:', text);
             throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
          }
@@ -271,20 +269,19 @@ class RestApi {
       
          const apiRequest = `${urlPath}${filePath}?component=contents`;
          const requestOptions = {
-            method: "GET",
             headers: { "X-Auth-Token": this.authToken },
-            redirect: "follow",
+            maxRedirects: 5 // Optional, axios follows redirects by default
          };
          try {
             const fullUrl = encodeURI(apiUrl + apiRequest)
-            response = await fetch(fullUrl, requestOptions);
-            contentType = response.headers.get('content-type');
-            contentLength = response.headers.get('content-length');
-            transferEncoding = response.headers.get('transfer-encoding');
+            response = await axios.get(fullUrl, requestOptions);
+            contentType = response.headers['content-type'];
+            contentLength = response.headers['content-length'];
+            transferEncoding = response.headers['transfer-encoding'];
             console.log('contentType:', contentType, 'contentLength:', contentLength, 'transferEncoding:', transferEncoding);
-            if (!response.ok) {
+            if (response.status != 200) {
                if (contentType.match(/\bjson\b/)) {
-                  data = await response.json();
+                  data = response.data;
                   if (data.message) {
                      result = data.details || data.message;
                      if (data.remediation && data.remediation !== "No remediation message is available.") {
@@ -297,7 +294,7 @@ class RestApi {
                      });
                   }
                } else {
-                  result = await response.text();
+                  result = response.data;
                   result = `${response.status}, ${response.statusText}: Result: ${result}`;
                }
                throw new Error(`HTTP error! ${result}`);
@@ -310,10 +307,10 @@ class RestApi {
                   // Create a writable stream to save the file
                   const fileStream = fs.createWriteStream(tempFile.name);
                   if (pipeline){
-                     await pipeline(response.body, fileStream); // Automatically handles errors (Node.js v15+)
+                     await pipeline(response.data, fileStream); // Automatically handles errors (Node.js v15+)
                   } else {
                      // Pipe the response stream directly to the file
-                     response.body.pipe(fileStream);
+                     response.data.pipe(fileStream);
                      // Await the 'finish' and 'error' events using a helper function
                      await streamToPromise(fileStream);
                   }
@@ -393,22 +390,39 @@ class RestApi {
 
          const apiRequest = `${urlPath}${filePath}?component=contents` + (selectedVersions[i]?.label ? `&version=${selectedVersions[i].label}` : '');
          const requestOptions = {
-            method: "GET",
             headers: { "X-Auth-Token": this.authToken },
-            redirect: "follow",
+            maxRedirects: 5 // Optional, axios follows redirects by default
          };
          try {
             // const response = await fetch(apiUrl + apiRequest, requestOptions);
-            const fullUrl = encodeURI(apiUrl + apiRequest)
-            const response = await fetch(fullUrl, requestOptions);
-            const contentType = response.headers.get('content-type');
-            const contentLength = response.headers.get('content-length');
+            const fullUrl = encodeURI(apiUrl + apiRequest);            
+            let response = null;
+            response = await axios.head(fullUrl, requestOptions);
+            const contentType = response.headers['content-type'];
+            const contentLength = response.headers['content-length'];
             console.log('contentType:', contentType, 'contentLength:', contentLength);
             let result = null;
             let data = null;
-            if (!response.ok) {
+            let responseType = null;
+            if (contentType.match(/\bjson\b/)) {
+               responseType = 'json';
+            }
+            else if (contentLength && contentLength < 100_000_000) {
+               if (
+                  /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
+                  || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
+               ) {
+                  responseType = 'text';
+               } else {
+                  responseType = 'arraybuffer';
+               }
+            }
+            if (responseType) {
+               response = await axios.get(fullUrl, {...requestOptions, responseType});
+            }
+            if (response.status != 200) {
                if (contentType.match(/\bjson\b/)) {
-                  data = await response.json();
+                  data = response.data;
                   if (data.message) {
                      result = data.details || data.message;
                      if (data.remediation && data.remediation !== "No remediation message is available.") {
@@ -421,7 +435,7 @@ class RestApi {
                      });
                   }
                } else {
-                  result = await response.text();
+                  result = response.data;
                   result = `${response.status}, ${response.statusText}: Result: ${result}`;
                }
                throw new Error(`HTTP error! ${result}`);
@@ -431,11 +445,11 @@ class RestApi {
                   /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
                   || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
                ) {
-                  const responseText = await response.text();
+                  const responseText = response.data;
                   this.fileContents.push(responseText);
                } else  {
                   // throw new Error(`File with content-length: ${contentLength} NOT downloaded given unexpected content-type: ${contentType}!`)
-                  const arrayBuffer = await response.arrayBuffer();
+                  const arrayBuffer = response.data;
                   this.fileContents.push(Buffer.from(arrayBuffer));
                }
                this.fileVersions.push(selectedVersions[i]?.label || '');
@@ -510,20 +524,19 @@ class RestApi {
       // console.log('filePath:', filePath)
       const apiRequest = `${urlPath}${filePath}?component=properties`;
       const requestOptions = {
-         method: "GET",
          headers: { "X-Auth-Token": this.authToken },
-         redirect: "follow",
-      };
+         maxRedirects: 5 // Optional, axios follows redirects by default
+     };
       try {
          // const response = await fetch(apiUrl + apiRequest, requestOptions);
          const fullUrl = encodeURI(apiUrl + apiRequest)
-         const response = await fetch(fullUrl, requestOptions);
-         const contentType = response.headers.get('content-type');
+         const response = await axios.get(fullUrl, requestOptions);
+         const contentType = response.headers['content-type'];
          console.log('contentType:', contentType);
          let result = null;
          let data = null;
          if (contentType.match(/\bjson\b/)) {
-            data = await response.json();
+            data = response.data;
             if (data.message) {
                result = data.details || data.message;
                if (data.remediation && data.remediation !== "No remediation message is available.") {
@@ -536,10 +549,10 @@ class RestApi {
                });
             }
          } else {
-            result = await response.text();
+            result = response.data;
             result = `${response.status}, ${response.statusText}: Result: ${result}`;
          }
-         if (!response.ok) {
+         if (!response.status === 200) {
             throw new Error(`HTTP error! ${result}`);
          } else {
             if (data) {
@@ -692,20 +705,19 @@ class RestApi {
       // console.log('filePath:', filePath)
       const apiRequest = `${urlPath}${filePath}?component=children&expand=item&limit=10000`;
       const requestOptions = {
-         method: "GET",
          headers: { "X-Auth-Token": this.authToken },
-         redirect: "follow",
+        maxRedirects: 5 // Optional, axios follows redirects by default
       };
       try {
          // const response = await fetch(apiUrl + apiRequest, requestOptions);
          const fullUrl = encodeURI(apiUrl + apiRequest)
-         const response = await fetch(fullUrl, requestOptions);
-         const contentType = response.headers.get('content-type');
+         const response = await axios.get(fullUrl, requestOptions);
+         const contentType = response.headers['content-type'];
          console.log('contentType:', contentType);
          let result = null;
          let data = null;
          if (contentType.match(/\bjson\b/)) {
-            data = await response.json();
+            data = response.data;
             if (data.message) {
                result = data.details || data.message;
                if (data.remediation && data.remediation !== "No remediation message is available.") {
@@ -718,10 +730,10 @@ class RestApi {
                });
             }
          } else {
-            result = await response.text();
+            result = response.data;
             result = `${response.status}, ${response.statusText}: Result: ${result}`;
          }
-         if (!response.ok) {
+         if (!response.status === 200) {
             throw new Error(`HTTP error! ${result}`);
          } else {
             if (data) {
@@ -754,20 +766,19 @@ class RestApi {
       const filePath = this.remoteFile;
       const apiRequest = `${urlPath}${filePath}?component=versions`;
       const requestOptions = {
-         method: "GET",
          headers: { "X-Auth-Token": this.authToken },
-         redirect: "follow",
+        maxRedirects: 5 // Optional, axios follows redirects by default
       };
       try {
          // const response = await fetch(apiUrl + apiRequest, requestOptions);
          const fullUrl = encodeURI(apiUrl + apiRequest)
-         const response = await fetch(fullUrl, requestOptions);
-         const contentType = response.headers.get('content-type');
+         const response = await axios.get(fullUrl, requestOptions);
+         const contentType = response.headers['content-type'];
          console.log('contentType:', contentType);
          let result = null;
          let data = null;
          if (contentType.match(/\bjson\b/)) {
-            data = await response.json();
+            data = response.data;
             if (data.message) {
                result = data.details || data.message;
                if (data.remediation && data.remediation !== "No remediation message is available.") {
@@ -780,10 +791,10 @@ class RestApi {
                });
             }
          } else {
-            result = await response.text();
+            result = response.data;
             result = `${response.status}, ${response.statusText}: Result: ${result}`;
          }
-         if (!response.ok) {
+         if (!response.status === 200) {
             throw new Error(`HTTP error! ${result}`);
          } else {
             if (data) {
@@ -1218,56 +1229,50 @@ class RestApi {
          const useEditorContents = false;
          [formdata, filename] = await this.getFormData(useEditorContents, param);
          requestOptions = {
-            method: "PUT",
-            body: formdata,
             headers: {
                ...formdata.getHeaders(),
                "X-Auth-Token": this.authToken
-            },
-            // redirect: "follow",
-            redirect: 'manual' // Handle redirection manually to prevent changing method to GET
+           },
+           maxRedirects: 0 // Handle redirection manually
          };
          // console.log(JSON.stringify(requestOptions));
          try {
             const fullUrl = encodeURI(apiUrl + apiRequest);
             console.log('fullUrl:', fullUrl);
-            let response = await fetch(fullUrl, requestOptions);
+            let response = await axios.put(fullUrl, formdata, requestOptions);
             console.log('response.status:', response.status, response.statusText);
             // Check if there's a redirect (3xx status code)
             const maxRedirects = 20;
             let redirects = 1;
             while (response.status >= 300 && response.status < 400 && redirects < maxRedirects) {
-               const redirectUrl = response.headers.get('location');
+               const redirectUrl = response.headers['location'];
                if (redirectUrl) {
                   console.log(`Response status: ${response.status} ${response.statusText}, Redirecting (${redirects}) to: ${redirectUrl}`);
                   vscode.window.showInformationMessage(`Redirecting (${redirects}) to: ${redirectUrl}`);
                   // re-create the formdata and file stream (they can only be used once!)
                   [formdata, filename] = await this.getFormData(useEditorContents, param);
                   requestOptions = {
-                     method: "PUT",
-                     body: formdata,
                      headers: {
                         ...formdata.getHeaders(),
                         "X-Auth-Token": this.authToken
-                     },
-                     // redirect: "follow",
-                     redirect: 'manual' // Handle redirection manually to prevent changing method to GET
+                    },
+                    maxRedirects: 0 // Handle redirection manually
                   };
                   // Perform the PUT request again at the new location
                   try {
-                     response = await fetch(redirectUrl, requestOptions);
+                     response = await axios.put(redirectUrl, formdata, requestOptions);
                   } catch (error) {
                      console.log('error:', error);
                   }
                }
                redirects += 1;
             }
-            if (!response.ok) {
+            if (!response.status === 200) {
                if (redirects >= maxRedirects) {
                   vscode.window.showErrorMessage(`HTTP error uploading Zip file, too many redirects! Status: ${response.status}  ${response.statusText}`);
                   throw new Error(`HTTP error uploading Zip file, too many redirects! Status: ${response.status}  ${response.statusText}`);
                }
-               const responseText = await response.text();
+               const responseText = response.data;
                console.log("responseText:", responseText);
                vscode.window.showErrorMessage(`HTTP error uploading Zip file! Status: ${response.status}  ${response.statusText}`);
                throw new Error(`HTTP error uploading Zip file! Status: ${response.status}  ${response.statusText}`);
@@ -1275,17 +1280,17 @@ class RestApi {
             let result;
             let successes, warnings, failures;
             let message, issues;
-            const contentType = response.headers.get('content-type');
+            const contentType = response.headers['content-type'];
             console.log('contentType:', contentType);
-            if (response.headers.get('content-type').match(/\bjson\b/)) {
-               const data = await response.json();
+            if (response.headers['content-type'].match(/\bjson\b/)) {
+               const data = response.data;
                ({ successes, warnings, failures } = data);
                result = beautify(JSON.stringify(data), {
                   indent_size: 2,
                   space_in_empty_paren: true,
                });
             } else {
-               result = await response.text();
+               result = response.data;
             }
             if (typeof successes.count === 'number' && typeof warnings.count === 'number' && typeof failures.count === 'number') {
                issues = warnings.count + failures.count;
@@ -1382,14 +1387,11 @@ class RestApi {
       let requestOptions;
       [formdata, filename] = await this.getFormData(useEditorContents, param);
       requestOptions = {
-         method: "PUT",
-         body: formdata,
          headers: {
             ...formdata.getHeaders(),
             "X-Auth-Token": this.authToken
-         },
-         // redirect: "follow",
-         redirect: 'manual' // Handle redirection manually to prevent changing method to GET
+        },
+        maxRedirects: 0 // Handle redirection manually
       };
       // console.log(JSON.stringify(requestOptions));
       let response;
@@ -1402,10 +1404,10 @@ class RestApi {
          try {
             // const fullUrl = encodeURI(apiUrl + apiRequest);
             const fullUrl = apiUrl + apiRequest;
-            response = await fetch(fullUrl, { ...requestOptions, signal: controller.signal });
+            response = await axios.put(fullUrl, formdata, { ...requestOptions, signal: controller.signal });
             clearTimeout(timeoutId); // clear timeout when the request completes
          } catch (error) {
-            if (error.name === 'AbortError') {
+            if (error.code === 'ECONNABORTED') {
                console.error(`Fetch request timed out after ${timeout/1000} seconds.`);
                throw new Error(`Fetch request timed out after ${timeout/1000} seconds.`);
             } else {
@@ -1418,25 +1420,22 @@ class RestApi {
          const maxRedirects = 20;
          let redirects = 1;
          while (response.status >= 300 && response.status < 400 && redirects < maxRedirects) {
-            const redirectUrl = response.headers.get('location');
+            const redirectUrl = response.headers['location'];
             if (redirectUrl) {
                console.log(`Response status: ${response.status} ${response.statusText}, Redirecting (${redirects}) to: ${redirectUrl}`);
                vscode.window.showInformationMessage(`Redirecting (${redirects}) to: ${redirectUrl}`);
                // re-create the formdata and file stream (they can only be used once!)
                [formdata, filename] = await this.getFormData(useEditorContents, param);
                requestOptions = {
-                  method: "PUT",
-                  body: formdata,
                   headers: {
                      ...formdata.getHeaders(),
                      "X-Auth-Token": this.authToken
-                  },
-                  // redirect: "follow",
-                  redirect: 'manual' // Handle redirection manually to prevent changing method to GET
+                 },
+                 maxRedirects: 0 // Handle redirection manually
                };
                // Perform the PUT request again at the new location
                try {
-                  response = await fetch(redirectUrl, requestOptions);
+                  response = await axios.put(redirectUrl, formdata, requestOptions);
                } catch (error) {
                   console.log('error:', error);
                   throw error;
@@ -1444,12 +1443,12 @@ class RestApi {
             }
             redirects += 1;
          }
-         if (!response.ok) {
+         if (!response.status === 200) {
             if (redirects >= maxRedirects) {
                vscode.window.showErrorMessage(`HTTP error uploading file, too many redirects! Status: ${response.status}  ${response.statusText}`);
                throw new Error(`HTTP error uploading file, too many redirects! Status: ${response.status}  ${response.statusText}`);
             }
-            const responseText = await response.text();
+            const responseText = response.data;
             console.log("responseText:", responseText);
             vscode.window.showErrorMessage(`HTTP error uploading file! Status: ${response.status}  ${response.statusText}`);
             throw new Error(`HTTP error uploading file! Status: ${response.status}  ${response.statusText}`);
@@ -1457,17 +1456,17 @@ class RestApi {
          let result;
          let status;
          let message;
-         const contentType = response.headers.get('content-type');
+         const contentType = response.headers['content-type'];
          console.log('contentType:', contentType);
-         if (response.headers.get('content-type').match(/\bjson\b/)) {
-            const data = await response.json();
+         if (response.headers['content-type'].match(/\bjson\b/)) {
+            const data = response.data;
             status = data.status;
             result = beautify(JSON.stringify(data), {
                indent_size: 2,
                space_in_empty_paren: true,
             });
          } else {
-            result = await response.text();
+            result = response.data;
          }
          if (status?.type === 'FAILURE') {
             message = `File "${filename}" upload failed: ` + status?.message || result;
