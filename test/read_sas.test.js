@@ -1,10 +1,11 @@
 const { initWebR, read_sas, read_xpt } = require('../src/read_sas');
+const path = require('path');
 
 
 
 initWebR()
    .then(() => {
-      return read_sas("./dm.sas7bdat");
+      return read_sas(path.join(__dirname, "dm.sas7bdat"));
    })    
    .then(data => { 
       console.log("\n\n=== dm.sas7bdat ===\n");
@@ -13,7 +14,7 @@ initWebR()
       })) 
    })
    .then(() => {
-      return read_xpt("./ds.xpt");
+      return read_xpt(path.join(__dirname, "ds.xpt"));
    })
    .then(data => {
       console.log("\n\n=== ds.xpt ===\n");
