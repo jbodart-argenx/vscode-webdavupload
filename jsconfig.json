@@ -4,9 +4,17 @@
         "target": "ES2020",
         "lib": [
             "ES2020"
-        ]
+        ],
+        "outDir": "dist",
+        "sourceMap": true,
+        "rootDir": "src",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true
     },
+    "include": ["src"],
     "exclude": [
-        "node_modules"
+        "node_modules",
+        "dist"
     ]
 }
