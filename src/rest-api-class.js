@@ -57,15 +57,19 @@ class RestApi {
    async getEndPointConfig(param, onlyRepo = false) {
       if (typeof param === 'string') {
          param = vscode.Uri.file(param);
+      } else if (param == null && vscode.window.activeTextEditor) {
+         param = vscode.window.activeTextEditor.document.uri;
       }
       if (param instanceof vscode.Uri) {
-         console.log('(getEndPointConfig) param:', param);
          this.localFile = param.fsPath;
-         this.localFileStat = await vscode.workspace.fs.stat(param);
-      } else if (param == null && vscode.window.activeTextEditor) {
-         this.localFile = vscode.window.activeTextEditor.document.uri.fsPath;
-         this.localFileStat = await vscode.workspace.fs.stat(vscode.window.activeTextEditor.document.uri);
-      }
+         this.localFileStat = null;
+         while(this.localFileStat == null && vscode.Uri.joinPath(param, '..') !== param) {
+            this.localFileStat = this.getFileStat(param);
+            if (this.localFileStat == null) {
+               param = vscode.Uri.joinPath(param, '..'); // get parent uri
+            }
+         }
+      } 
       else {
          this.localFile = null;
          this.localFileStat = null;
@@ -478,7 +482,7 @@ class RestApi {
          try {
             fileStat = await vscode.workspace.fs.stat(param);           
          } catch (error) {
-            fileStat = {error};
+            fileStat = null;
          }
       } 
       return fileStat;
