@@ -67,3 +67,7 @@
 - Re-derive remoteFile from workingWSFolder and config.localRootPath
 - Ignore version information retrieved without a version number (i.e. non-versioned files)
 - In method getRemoteFilePath(), improve log messages when config is invalid
+
+## 1.0.2
+
+- Fixed issue with configuration file webdav.json not found in case local file/folder does not exist
