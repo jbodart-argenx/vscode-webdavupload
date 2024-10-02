@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const beautify = require("js-beautify");
 const { createZip, extractZip } = require("./zip.js");
+const { getObjectView } = require("./object-view.js");
 
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
@@ -341,6 +342,7 @@ async function restApiProperties(param) {
       console.log("File properties:\n", properties);
       // vscode.window.showInformationMessage(properties);
       showMultiLineText(properties, "Remote File Properties", `${restApi.config.label} file properties: ${restApi.remoteFile}`);
+      getObjectView(JSON.parse(properties), false, `${restApi.config.label} file properties: ${restApi.remoteFile}`, "Remote File Properties");
    } catch (err) {
       console.log(err);
    }
@@ -372,6 +374,7 @@ async function restApiVersions(param) {
       console.log("File versions:\n", versions);
       // vscode.window.showInformationMessage(versions);
       showMultiLineText(versions, "Remote File Versions", `${restApi.config.label} file versions: ${restApi.remoteFile}`);
+      getObjectView(JSON.parse(versions), false, `${restApi.config.label} file versions: ${restApi.remoteFile}`, "Remote File Versions");
    } catch (err) {
       console.log(err);
    }
