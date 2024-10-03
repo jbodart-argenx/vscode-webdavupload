@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const Zip = require("adm-zip");
+const OriginalFs = require("original-fs");
 
 // Function to create a zip file and add files/folders to a subdirectory in the zip
 function createZip(zipFilePath /*: string*/, filesAndFolders /*: string[]*/, subdirectory = '' /*: string*/) /*: Promise<void>*/ {
@@ -41,7 +42,8 @@ function createZip(zipFilePath /*: string*/, filesAndFolders /*: string[]*/, sub
 function extractZip(zipFilePath /*: string*/, extractToPath /*: string*/, overwrite = true) /*: Promise<void>*/ {
    return new Promise((resolve, reject) => {
       try {
-         const zip = new Zip(zipFilePath);
+         // const zip = new Zip(zipFilePath);
+         const zip = new Zip(zipFilePath, {fs: OriginalFs});
          zip.extractAllTo(extractToPath, overwrite); 
          resolve();
       } catch (err) {
