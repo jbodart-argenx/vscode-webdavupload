@@ -24,7 +24,7 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 
 const { getEndpointConfigForCurrentPath } = require('./endpointConfig.js');
 
-const { getCredentials, storeCredentials, authTokens, setAuthTokens } = require('./auth.js')
+const { askForCredentials, getCredentials, storeCredentials, authTokens, setAuthTokens } = require('./auth.js')
 
 
 // REST API functions
@@ -145,7 +145,9 @@ class RestApi {
             maxRedirects: 5 // Optional, axios follows redirects by default
          });
 
-         if (response.status !== 200) {
+         if (response.status === 401) {
+            this.encryptedPassword = { status: response.status, statusText: response.statusText, data: response.data, headers: response.headers };
+         } else if (response.status !== 200) {
             throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
          }
 
@@ -187,17 +189,42 @@ class RestApi {
                }
             } else {
                delete authTokens[this.host];
+               return this.logon();
             }
          } catch (err) {
             console.log(err);
          }
       }
-      if (!this.encryptedPassword) {
+      if (!this.encryptedPassword || typeof this.encryptedPassword !== 'string') {
+         console.log(this.encryptedPassword);
          const creds = await getCredentials(this.host);
          const { _username: username, _password: password } = creds;
+         if (typeof username === 'string' 
+            && typeof password === 'string'
+            && username.trim().length > 1
+            && password.trim().length > 6
+         ) {
          this.username = username;
          await this.encryptPassword(password);
-         if (!this.encryptedPassword) {
+         } else {
+            const creds = await askForCredentials(this.host);
+            const { _username: username, _password: password } = creds;
+            if (typeof username === 'string' 
+               && typeof password === 'string'
+               && username.trim().length > 1
+               && password.trim().length > 6
+            ) {
+               this.username = username;
+               await this.encryptPassword(password);
+            } else {
+               this.encryptedPassword = null;
+               return this.logon();
+            }
+         }
+         if (typeof this.encryptedPassword === 'object') {
+            throw new Error('No encrypted password, aborting logon.');
+         }
+         if (typeof this.encryptedPassword !== 'string') {
             throw new Error('No encrypted password, aborting logon.');
          }
       }
@@ -247,6 +274,29 @@ class RestApi {
             throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
          }
       } catch (error) {
+         if (error?.response?.status === 401) {
+            if (`${error.response?.data?.message}`.match(/credentials.*incorrect/i)) {
+               try {
+                  this.encryptedPassword = null;
+                  const credentials = await askForCredentials(this.host);
+                  if (typeof credentials._username === 'string' 
+                     && typeof credentials._password === 'string'
+                     && credentials._username.trim().length > 1
+                     && credentials._password.trim().length > 6
+                  ) {
+                     this.username = credentials._username;
+                     await this.encryptPassword(credentials._password);
+                     if (typeof this.encryptedPassword === 'string') {
+                        return this.logon();
+                     }
+                  } else {
+                     return this.logon();
+                  }
+               } catch (error) {
+                  console.log(error);
+               }
+            }
+         }
          console.error('Error fetching x-auth-token:', error)
       }
    }
@@ -274,15 +324,23 @@ class RestApi {
          const apiRequest = `${urlPath}${filePath}?component=contents`;
          const requestOptions = {
             headers: { "X-Auth-Token": this.authToken },
-            maxRedirects: 5 // Optional, axios follows redirects by default
+            maxRedirects: 5, // Optional, axios follows redirects by default
+            responseType: 'arraybuffer'
          };
          try {
             const fullUrl = encodeURI(apiUrl + apiRequest)
-            response = await axios.get(fullUrl, requestOptions);
+            response = await axios.head(fullUrl, requestOptions);
             contentType = response.headers['content-type'];
             contentLength = response.headers['content-length'];
             transferEncoding = response.headers['transfer-encoding'];
             console.log('contentType:', contentType, 'contentLength:', contentLength, 'transferEncoding:', transferEncoding);
+            if (transferEncoding?.toLowerCase() === 'chunked') {
+               requestOptions.responseType = 'stream';
+            }
+            response = await axios.get(fullUrl, requestOptions);
+            contentType = response.headers['content-type'];
+            contentLength = response.headers['content-length'];
+            transferEncoding = response.headers['transfer-encoding'];
             if (response.status != 200) {
                if (contentType.match(/\bjson\b/)) {
                   data = response.data;
