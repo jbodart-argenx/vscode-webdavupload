@@ -320,7 +320,6 @@ class RestApi {
       console.log('urlPath:', urlPath)
       const filePath = this.remoteFile;
       let response, contentType, contentLength, transferEncoding, result, data;
-      
          const apiRequest = `${urlPath}${filePath}?component=contents`;
          const requestOptions = {
             headers: { "X-Auth-Token": this.authToken },
@@ -329,17 +328,17 @@ class RestApi {
          };
          try {
             const fullUrl = encodeURI(apiUrl + apiRequest)
-            response = await axios.head(fullUrl, requestOptions);
+         response = await axios.get(fullUrl, requestOptions);
             contentType = response.headers['content-type'];
             contentLength = response.headers['content-length'];
             transferEncoding = response.headers['transfer-encoding'];
             console.log('contentType:', contentType, 'contentLength:', contentLength, 'transferEncoding:', transferEncoding);
-            if (transferEncoding?.toLowerCase() === 'chunked') {
+         if (`${transferEncoding}`.toLowerCase() === 'chunked') {
                requestOptions.responseType = 'stream';
-            }
             response = await axios.get(fullUrl, requestOptions);
             contentType = response.headers['content-type'];
             contentLength = response.headers['content-length'];
+         }
             transferEncoding = response.headers['transfer-encoding'];
             if (response.status != 200) {
                if (contentType.match(/\bjson\b/)) {
