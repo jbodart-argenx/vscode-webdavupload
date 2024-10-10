@@ -10,7 +10,7 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 
 
 // REST API functions
-const {  restApiVersions, restApiCompare, restApiUpload, restApiProperties } = require('./rest-api.js');
+const {  restApiVersions, restApiCompare, restApiUpload, restApiProperties, restApiSubmitJob } = require('./rest-api.js');
 
 const { localFolderContents, restApiFolderContents, compareFolderContents } = require('./folderView.js');
 
@@ -29,6 +29,16 @@ async function activate(context) {
     // Pass secret storage to other modules
     initializeSecretModule(secretStorage);
 
+    // A Map to store submitted jobs by server and their status
+    let JobSubmissionsByServer = new Map(); // Each key is a server, value is an array of job objects
+
+    // Example of a task object
+    // {
+    //   jobSubmissionId: 'abc123',
+    //   server: 'server1',
+    //   status: 'in-progress' // 'COMPLETED_SUCCESSFULLY', 'COMPLETED_ERRORS', 'FAILED', etc.
+    // }
+
     const restApiUploadCommand = vscode.commands.registerCommand(
         "extension.restApiUpload",
         restApiUpload
@@ -44,6 +54,10 @@ async function activate(context) {
     const restApiVersionsCommand = vscode.commands.registerCommand(
         "extension.restApiVersions",
         restApiVersions
+    );
+    const restApiSubmitJobCommand = vscode.commands.registerCommand(
+        "extension.restApiSubmitJob",
+        restApiSubmitJob
     );
     const restApiFolderContentsCommand = vscode.commands.registerCommand(
         "extension.restApiFolderContents",
@@ -63,6 +77,7 @@ async function activate(context) {
     context.subscriptions.push(restApiCompareCommand);
     context.subscriptions.push(restApiPropertiesCommand);
     context.subscriptions.push(restApiVersionsCommand);
+    context.subscriptions.push(restApiSubmitJobCommand);
     context.subscriptions.push(restApiFolderContentsCommand);
     context.subscriptions.push(localFolderContentsCommand);
     context.subscriptions.push(compareFolderContentsCommand);
