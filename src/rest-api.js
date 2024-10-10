@@ -351,6 +351,28 @@ console.log('typeof restApiProperties:', typeof restApiProperties);
 
 
 
+// restApiSubmitJob
+async function restApiSubmitJob(param) {
+   const restApi = new RestApi();
+   try {
+      const onlyRepo = false;
+      await restApi.getEndPointConfig(param, onlyRepo);   // based on the passed Uri (if defined)
+      // otherwise based on the path of the local file open in the active editor
+      // also sets remoteFile
+      if (!restApi.config) {
+         return;
+      }
+      const submitThisJob = true;
+      let jobData = await restApi.getRemoteJobParameters(param, submitThisJob);
+      debugger;
+      console.log(jobData);
+   } catch (err) {
+      console.log(err);
+   }
+}
+console.log('typeof restApiSubmitJob:', typeof restApiSubmitJob);
+
+
 
 // restApiVersions
 async function restApiVersions(param) {
@@ -393,5 +415,6 @@ module.exports = {
    restApiDownload,
    restApiDownloadFolderAsZip,
    restApiCompare,
-   restApiUpload
+   restApiUpload,
+   restApiSubmitJob
 };
