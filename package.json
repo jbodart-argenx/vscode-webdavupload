@@ -41,6 +41,11 @@
                 "category": "LSAF"
             },
             {
+                "command": "extension.restApiSubmitJob",
+                "title": "LSAF Rest API: Submit Job",
+                "category": "LSAF"
+            },
+            {
                 "command": "extension.restApiFolderContents",
                 "title": "LSAF Rest API: Get Remote Folder Contents",
                 "category": "LSAF"
@@ -76,6 +81,12 @@
                     "command": "extension.restApiVersions",
                     "when": "!explorerResourceIsFolder",
                     "group": "LSAF"
+                },
+                {
+                    "command": "extension.restApiSubmitJob",
+                    "title": "LSAF Rest API: Submit Job",
+                    "when": "resourceExtname == '.job'",
+                    "category": "LSAF"
                 },
                 {
                     "command": "extension.restApiFolderContents",
@@ -183,6 +194,7 @@
         "readable-stream": "^3.3.0",
         "strip-bom-buf": "^4.0.0",
         "tmp": "0.1.0",
-        "webr": "^0.4.2"
+        "webr": "^0.4.2",
+        "xml2js": "^0.6.2"
     }
 }
