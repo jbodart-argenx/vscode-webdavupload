@@ -74,11 +74,16 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                   border: 1px solid black;
                }
                th, td {
-                  padding: 8px;
+                  padding: 3px;
                   text-align: left;
+                  vertical-align: top;
+               }
+               textarea {
+                  margin: 0;
+                  padding: 2px;
                }
                .nested-table {
-                  margin-left: 20px;
+                  margin-left: 10px;
                }
          </style>
       </head>
@@ -128,14 +133,21 @@ function generateTable(obj, editable, parentKey = '') {
 
    for (const [key, value] of Object.entries(obj)) {
       const fullKey = (parentKey ? `${parentKey}.${key}` : key).toString().replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
       if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
          // Directly display primitive values in the second column
-         html += `<tr>
-               <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-               <td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
-                  >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>
-         </tr>`;
+         if (editable) {
+            html += `<tr>
+                  <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                  <td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
+                     >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>
+               </tr>`;
+         } else {
+            html += `<tr>
+                  <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                  <td class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" 
+                     >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+               </tr>`;
+         }
       } else if (Array.isArray(value)) {
          // Display array of objects inside the second column
          html += `<tr>
@@ -179,11 +191,19 @@ function generateArrayTable(arr, editable, parentKey = '') {
 
          if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
                // Directly display primitive values in the second column
-               html += `<tr>
-                  <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                  <td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
-                     >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>
-               </tr>`;
+               if (editable) {
+                  html += `<tr>
+                     <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                     <td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
+                        >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>
+                  </tr>`;
+               } else {
+                  html += `<tr>
+                     <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                     <td class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" 
+                        >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                  </tr>`;
+               }
          } else if (Array.isArray(value)) {
                // Nested arrays of objects
                html += `<tr>
