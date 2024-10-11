@@ -1039,43 +1039,43 @@ class RestApi {
             && Array.isArray(this.jobContents?.job?.parameters[0]?.parameter)
          ) {
             jobParams = [...jobParams, ...this.jobContents.job.parameters[0].parameter
-               .map(p => p.$)
+               .map(p => ({ defaultValue:p._, ...p.$}))
                .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
          }
          if (this.jobContents?.job?.parameters[0]['character-parameter']
             && Array.isArray(this.jobContents?.job?.parameters[0]['character-parameter'])) {
                jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['character-parameter']
-               .map(p => p.$)
+               .map(p => ({ defaultValue:p._, ...p.$}))
                .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
          }
          if (this.jobContents?.job?.parameters[0]['numeric-parameter']
             && Array.isArray(this.jobContents?.job?.parameters[0]['numeric-parameter'])) {
                jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['numeric-parameter']
-               .map(p => p.$)
+               .map(p => ({ defaultValue:p._, ...p.$}))
                .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
          }
          if (this.jobContents?.job?.parameters[0]['folder-parameter']
             && Array.isArray(this.jobContents?.job?.parameters[0]['folder-parameter'])) {
                jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['folder-parameter']
-               .map(p => p.$)
+               .map(p => ({ defaultValue:p._, ...p.$}))
                .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
          }
          if (this.jobContents?.job?.parameters[0]['file-parameter']
             && Array.isArray(this.jobContents?.job?.parameters[0]['file-parameter'])) {
                jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['file-parameter']
-               .map(p => p.$)
+               .map(p => ({ defaultValue:p._, ...p.$}))
                .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
          }
          if (this.jobContents?.job?.parameters[0]['masked-parameter']
             && Array.isArray(this.jobContents?.job?.parameters[0]['masked-parameter'])) {
                jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['masked-parameter']
-               .map(p => p.$)
+               .map(p => ({ defaultValue:p._, ...p.$}))
                .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
          }
          if (this.jobContents?.job?.parameters[0]['date-parameter']
             && Array.isArray(this.jobContents?.job?.parameters[0]['date-parameter'])) {
                jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['date-parameter']
-               .map(p => p.$)
+               .map(p => ({ defaultValue:p._, ...p.$}))
                .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
          }
          const editableParams = jobParams.map(p => ({[`[${p.name}] ${p.label}:`]: p.value, includeSubFolders: p.includeSubFolders}));
@@ -1085,18 +1085,6 @@ class RestApi {
          if (jobParams) {
             const editable = true;
             newParams = await getObjectView(editableParams, editable, "Enter Job Parameters", "Job Parameters");
-            debugger;  
-            /*
-            // TypeError: newParams.map is not a function
-            this.newParams = Object.entries(newParams).map(([a, b]) => b);
-            this.newParams = this.newParams.map(
-               p => Object.entries(p).reduce((acc, [key, value]) => {
-                  const newKey = key.split(/\[\]/)[0];
-                  acc[newKey] = value;
-                  return acc;
-               }, {})
-            );
-            */
             newParams = Object.entries(newParams).map(([a, b]) => b)
                .map(item => Object.entries(item).reduce((acc, [k,v]) => {acc[k.split(/[\[\]]/)[1]]= v; return acc}, {}))
                .reduce((acc, obj)=> ({...acc, ...obj}), {});
@@ -1107,7 +1095,9 @@ class RestApi {
          }
          return newParams;
       } catch (error) {
-         console.log(error);
+         console.log('(getRemoteJobParameters) error:', error);
+         debugger;
+         vscode.window.showErrorMessage('(getRemoteJobParameters) error:', error);
       }
    }
 
@@ -1713,37 +1703,23 @@ class RestApi {
    
    async submitJob(argJob, argVersion, argParams) {
       console.log('job:', argJob, 'version:', argVersion, '\nparams:\n', argParams);
-      debugger;
-      /*
-      if (typeof argJob === 'string') {
-         argJob = vscode.Uri.file(argJob);
-      }
       if (argJob instanceof vscode.Uri) {
-         const fileStat = await this.getFileStat(argJob);
-         if (fileStat?.type === vscode.FileType.File) {
-            this.localFile = argJob.fsPath;
-         } else if (fileStat?.type === vscode.FileType.Directory) {
-            return vscode.window.showWarningMessage(`Submit Job: ${argJob.fsPath} is a folder!`);
-         } else {
-            return vscode.window.showWarningMessage(`Submit Job: ${argJob} is neither a file nor a folder!`);
-         }
-      } else {
-         return vscode.window.showWarningMessage(`Submit Job: invalid job specified: ${argJob}`);
+         argJob = argJob.fsPath;
       }
-      */
       if (typeof argJob !== 'string') {
          console.warn(`(submitJob) invalid argJob type: ${typeof argJob} ${argJob}`);
          throw new Error(`(submitJob) invalid argJob type: ${typeof argJob} ${argJob}`);
       }
       await this.logon();
       const apiUrl = `https://${this.host}/lsaf/api`;
+      const submitHost = new URL(this.config.remoteEndpoint.url).hostname.split('.')[0];
       const urlPath = new URL(this.config.remoteEndpoint.url).pathname
          .replace(/\/lsaf\/webdav\/work\//, '/jobs/workspace/')
          .replace(/\/lsaf\/webdav\/repo\//, '/jobs/repository/')
          .replace(/\/$/, '')
-      const jobType = /\/repository\//.test(urlPath) ? "repo" : /\/workspace\//.test(urlPath) ? "work" : "unknown";
+      const jobType = /\/repository\//.test(urlPath) ? "repo" : /\/workspace\//.test(urlPath) ? "work" : undefined;
       const jobPathPrefix = urlPath.replace(/^\/jobs\/(workspace|repository)/, '');
-      console.log('jobType:', jobType, 'urlPath:', urlPath, 'jobPathPrefix:', jobPathPrefix);
+      console.log('submitHost:', submitHost, 'jobType:', jobType, 'urlPath:', urlPath, 'jobPathPrefix:', jobPathPrefix);
       const jobPath = this.remoteFile;
       const fullJobPath = jobPathPrefix + jobPath;
       console.log('fullJobPath:', fullJobPath);
@@ -1752,7 +1728,6 @@ class RestApi {
          apiRequest = `${apiRequest}&version=${argVersion.toString().trim()}`;
       }
       apiRequest = `${apiRequest}&expand=status`;
-      debugger;
       const fullUrl = apiUrl + apiRequest
       console.log('fullUrl:', fullUrl);
       let requestOptions;
@@ -1776,90 +1751,290 @@ class RestApi {
       let status;
       let message;
       let submissionId;
-      try {
-
-         const controller = new AbortController();
-         const timeout = 10_000;
-         const timeoutId = setTimeout(() => controller.abort(), timeout);
-         try {
-            response = await axios.request({ ...requestOptions, signal: controller.signal });
-            clearTimeout(timeoutId); // clear timeout when the request completes
-         } catch (error) {
-            if (error.code === 'ECONNABORTED') {
-               console.error(`Http request timed out after ${timeout/1000} seconds.`);
-               throw new Error(`Http request timed out after ${timeout/1000} seconds.`);
-            } else {
-               console.error('Http request failed:', error);
-               throw new Error('Http request failed:', error.message);
+      let data;
+      const intervalId = setInterval(async () => {
+         if (requestOptions.url) {
+            try {
+               const controller = new AbortController();
+               const timeout = 10_000;
+               const timeoutId = setTimeout(() => controller.abort(), timeout);
+               try {
+                  response = await axios.request({ ...requestOptions, signal: controller.signal });
+                  clearTimeout(timeoutId); // clear timeout when the request completes
+                  requestOptions.url = null; // prevent re-launching same job continuously
+               } catch (error) {
+                  clearInterval(intervalId);
+                  debugger;
+                  if (error.code === 'ECONNABORTED') {
+                     console.error(`(submitJob) Http request timed out after ${timeout/1000} seconds.`);
+                     throw new Error(`(submitJob) Http request timed out after ${timeout/1000} seconds.`);
+                  } else {
+                     console.error('(submitJob) Http request failed:', error);
+                     debugger;
+                     throw new Error('(submitJob) Http request failed:', error.message);
+                  }
+               }
+               console.log('response.status:', response.status, response.statusText);
+               
+               if (!response.status === 200) {
+                  const responseText = response.data;
+                  console.log("responseText:", responseText);
+                  vscode.window.showErrorMessage(`HTTP error submitting ${jobType} job! Status: ${response.status}  ${response.statusText}`);
+                  throw new Error(`HTTP error submitting ${jobType} job! Status: ${response.status}  ${response.statusText}`);
+               }
+               const contentType = response.headers['content-type'];
+               console.log('contentType:', contentType);
+               if (response.headers['content-type'].match(/\bjson\b/)) {
+                  data = response.data;
+                  status = data.status || (data.state ? { type: `${data.state}`.toUpperCase(), message: data.message } : undefined) ;
+                  console.log('status:', status);
+                  submissionId = data.submissionId || data.id || submissionId;
+                  // change URL toget submission status
+                  if (submissionId) {
+                     requestOptions.url = apiUrl + `/jobs/submissions/${submissionId}`;
+                     requestOptions.method = 'get';
+                  } 
+                  if (! submissionId || ! status || !data ) {
+                     debugger;
+                  }
+                  result = beautify(JSON.stringify(data), {
+                     indent_size: 2,
+                     space_in_empty_paren: true,
+                  });
+               } else {
+                  result = response.data;
+               }
+               if (status?.type === 'FAILURE') {
+                  message = `${jobType} job "${fullJobPath}" submission failed: ` + status?.message || result;
+                  clearInterval(intervalId);
+               } else if (status?.type === 'CANCELED') {
+                  message = `${jobType} job "${fullJobPath}" submission canceled: ` + status?.message || result;
+                  clearInterval(intervalId);
+               } else if (status?.type === 'COMPLETED') {
+                  message = `${jobType} job "${fullJobPath}" submitted: ` + status?.message || result;
+                  clearInterval(intervalId);
+                  const location = `${jobType || 'repository'}`
+                     .replace(/^repo$/, 'repository')
+                     .replace(/^work$/, 'workspace')
+                     ;
+                  this.manifest = await this.getJobSubmissionManifest(submissionId, location);
+                  const editable = false;
+                  debugger;
+                  if (this.manifest){
+                     try{
+                        await getObjectView(this.manifest, editable, "Job Submission Manifest", "Job Submission Manifest");
+                     } catch(error) {
+                        debugger;
+                        console.log('(submitJob) Error in getObjectView():', error);
+                     }
+                  }
+                  console.log('this.manifest:', beautify(JSON.stringify(this.manifest)));
+                  console.log('done');
+               } else {
+                  if (status?.type === 'STARTED') {
+                     message = `${jobType} job "${fullJobPath}" started: ` + status?.message || result;
+                  } else if (status?.type === 'RUNNING') {
+                     message = `${jobType} job "${fullJobPath}" running: ` + status?.message || result;
+                  } else if (status?.type === 'PUBLISHING') {
+                     message = `${jobType} job "${fullJobPath}" publishing: ` + status?.message || result;
+                  } else {
+                     message = `${jobType} job "${fullJobPath}" Status type: ${status?.type} ` + status?.message || result;
+                     debugger;
+                     console.log(message);
+                  }
+               } 
+               console.log('submissionId:', submissionId);
+               console.log('  result:', result);
+               console.log('  '+message);
+               vscode.window.showInformationMessage(message);
+            } catch (error) {
+               vscode.window.showErrorMessage(`Error submitting ${jobType} job "${fullJobPath || argJob}":`, error);
+               debugger;
+               console.error(`Error submitting ${jobType} job "${fullJobPath || argJob}":`, error);
             }
          }
+      }, 3000)
+   };
+
+   removeNulls(obj) {
+      for (const key in obj) {
+         if (obj[key] == null || key === 'null') {
+            console.log('--> deleting Object key:', key, 'with value:', obj[key]);
+            delete obj[key]; // Remove the property if it's null
+         } else if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+            // If it's a nested object, recursively remove nulls from it
+            this.removeNulls(obj[key]);
+
+            // After recursion, check if the nested object is now empty, and delete if so
+            if (Object.keys(obj[key]).length === 0) {
+                  delete obj[key];
+            }
+         }
+      }
+      return obj;
+   }
+
+   async getJobSubmissionManifest(submissionId, location = 'repository') {
+      await this.logon();
+      const getUrl = async o => ({path: o["repository-file"][0]._, ...o["repository-file"][0].$, ...(await this.getUrlFromManifestItem(o))});
+      const apiUrl = `https://${this.host}/lsaf/api`;
+      let requestOptions, response, manifestPath, manifestContent, manifestInputs, manifestOutputs,
+         manifestPrograms, manifestLog, manifestLst, manifestParameters, manifestMetrics,
+         manifestInputExternalRefs, manifestOutputExternalRefs, submission, data;
+      requestOptions = {
+         method: 'get',
+         url: apiUrl + `/jobs/submissions/${submissionId}/manifest`,
+         headers: {
+            "X-Auth-Token": this.authToken
+         },
+         maxRedirects: 5 
+      };
+      try {
+         response = await axios.request(requestOptions);
+      } catch (error) {
+         console.error('(getJobSubmissionManifest) Http request failed:', error);
+         debugger;
+         throw new Error('(getJobSubmissionManifest) Http request failed:', error.message);
+      }
+      console.log('response.status:', response.status, response.statusText);
+      if (!response.status === 200) {
+         const responseText = response.data;
+         console.log("responseText:", responseText);
+         vscode.window.showErrorMessage(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+         throw new Error(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+      }
+      const contentType = response.headers['content-type'];
+      console.log('contentType:', contentType);
+      if (response.headers['content-type'].match(/\bjson\b/)) {
+         manifestPath = response.data.path;
+         location = location || response.data.schematype;
+         console.log('response.data:', response.data);
+         console.log('location:', location, 'manifestPath:', manifestPath);
+         requestOptions.url = apiUrl + `/${location}/files${manifestPath}?component=contents`;
+         console.log('requestOptions.url:', requestOptions.url);
+         try {
+            response = await axios.request(requestOptions);
+            console.log('response.status:', response.status, response.statusText);
+            if (!response.status === 200) {
+               const responseText = response.data;
+               console.log("responseText:", responseText);
+               vscode.window.showErrorMessage(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+               throw new Error(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+            }
+            const contentType = response.headers['content-type'];
+            console.log('contentType:', contentType);
+            if (contentType === 'application/octet-stream;charset=UTF-8'
+               && /^<\?xml /.test(response.data)
+            ) {
+               manifestContent = await this.parseXmlString(response.data); 
+               console.log('manifestContent:', manifestContent);
+               manifestOutputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].outputs[0].output.map(getUrl))).map(o => o.value);
+               console.log('manifestOutputs:', manifestOutputs);
+               manifestLog = (await Promise.allSettled(manifestContent["job-manifest"].job[0].logs[0].log.map(getUrl))).map(o => o.value)[0];
+               console.log('manifestLog:', manifestLog);
+               manifestLst = (await Promise.allSettled(manifestContent["job-manifest"].job[0].results[0].result.map(getUrl))).map(o => o.value)[0];
+               console.log('manifestLst:', manifestLst);
+               manifestInputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].inputs[0].input.map(getUrl)))
+                  .map(o => o.value)
+                  .filter(o => o != null)
+                  ;
+               manifestInputExternalRefs = manifestContent["job-manifest"].job[0].inputs[0]["external-ref"].map(p => p.$);
+               manifestOutputExternalRefs = manifestContent["job-manifest"].job[0].outputs[0]["external-ref"].map(p => p.$);
+               console.log('manifestInputs:', manifestInputs);
+               manifestPrograms = (await Promise.allSettled(manifestContent["job-manifest"].job[0].programs[0].program.map(getUrl))).map(o => o.value);
+               console.log('manifestPrograms:', manifestPrograms);
+               manifestParameters = {};
+               for (const key in manifestContent["job-manifest"].job[0].parameters[0]) {
+                  manifestParameters = { 
+                  ...manifestParameters,
+                  [key]: manifestContent["job-manifest"].job[0].parameters[0][key].map(p => ({...p.$, value: p._ || ''}))}
+               }
+               manifestMetrics = {
+                  transferMetrics: manifestContent["job-manifest"].metrics[0].transferMetrics[0].transferMetric.map(p => p.$)
+               };
+               submission = {
+                  ...manifestContent["job-manifest"]["job-submission"][0].$,
+                  ...manifestContent["job-manifest"]["job-submission"].reduce((acc, p) => {
+                        Object.keys(p).forEach(k => {
+                           if (k !== '$') {
+                           acc = { ...acc, [k]: p[k][0]}
+                           }
+                        })
+                        return acc;
+                     }, {})
+                  };
+               delete submission.$;
+               data = {
+                  jobPath: manifestContent["job-manifest"].job[0]['repository-file'][0]._,
+                  ...manifestContent["job-manifest"].job[0]['repository-file'][0].$,
+                  "job-manifest-version": manifestContent["job-manifest"].$.version,
+                  type: manifestContent["job-manifest"].type[0],
+                  ...(['owner', 'run-as-owner', 'description'].reduce((acc, key) => {
+                     acc = {...acc, [key]: manifestContent["job-manifest"].job[0][key][0]}
+                     return acc;
+                  }, {})),
+                  ...manifestContent["job-manifest"].$,
+                  submission,
+                  metrics: manifestMetrics,
+                  programs: manifestPrograms,
+                  parameters: manifestParameters,
+                  log: manifestLog,
+                  lst: manifestLst,
+                  outputs: manifestOutputs,
+                  outputExternalRefs: manifestOutputExternalRefs,
+                  inputs: manifestInputs,
+                  inputExternalRefs: manifestInputExternalRefs
+               };
+               showMultiLineText(beautify(JSON.stringify(data)), "Manifest Content", manifestPath);
+               data = this.removeNulls(data);
+            }
+            console.log('response.status:', response.status, response.statusText);
+         } catch (error) {
+            console.error('Http request failed retrieving manifest contents:', error);
+            debugger;
+            throw new Error('Http request failed retrieving manifest contents:', error.message);
+         }
          console.log('response.status:', response.status, response.statusText);
-         
          if (!response.status === 200) {
             const responseText = response.data;
             console.log("responseText:", responseText);
-            vscode.window.showErrorMessage(`HTTP error submitting ${jobType} job! Status: ${response.status}  ${response.statusText}`);
-            throw new Error(`HTTP error submitting ${jobType} job! Status: ${response.status}  ${response.statusText}`);
+            vscode.window.showErrorMessage(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+            throw new Error(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
          }
          const contentType = response.headers['content-type'];
          console.log('contentType:', contentType);
-         if (response.headers['content-type'].match(/\bjson\b/)) {
-            const data = response.data;
-            status = data.status;
-            submissionId = data.submissionId;
-            result = beautify(JSON.stringify(data), {
-               indent_size: 2,
-               space_in_empty_paren: true,
-            });
-         } else {
-            result = response.data;
-         }
-         if (status?.type === 'FAILURE') {
-            message = `${jobType} job "${fullJobPath}" submission failed: ` + status?.message || result;
-         } else if (status?.type === 'SUCCESS') {
-            message = `${jobType} job "${fullJobPath}" submitted: ` + status?.message || result;
-         } else if (status?.type === 'STARTED') {
-            message = `${jobType} job "${fullJobPath}" started: ` + status?.message || result;
-            const intervalId = setInterval(async () => {
-               try {
-                  const response = await axios.request({
-                     method: 'get',
-                     url: `${apiUrl}/jobs/submissions/${submissionId}`,
-                     headers: {
-                        "X-Auth-Token": this.authToken
-                     },
-                     maxRedirects: 5 
-                  });
-                  if (`${response?.data?.state}`.toLowerCase() === "completed") {
-                     console.log(response.data)
-                     debugger;
-                     clearInterval(intervalId);
-                  } else if (`${response?.data?.state}`.toLowerCase() === "failed") {
-                     console.log(response.data)
-                     debugger;
-                     clearInterval(intervalId);
-                  } else {
-                     console.log(response?.data?.state);
-                  }
-               } catch (error) {
-                  console.log(error);
-               }
-            }, 5000)
-         } else {
-            console.log('result:', result);
-            message = `${jobType} job "${fullJobPath}" submission result result: ${result}`;
-         }
-         console.log('submissionId:', submissionId);
-         console.log(message);
-         vscode.window.showInformationMessage(message);
-      } catch (error) {
-         vscode.window.showErrorMessage(`Error submitting ${jobType} job "${fullJobPath || argJob}":`, error);
-         console.error(`Error submitting ${jobType} job "${fullJobPath || argJob}":`, error);
+         // debugger;
+         // console.log('response.data:', response.data);
       }
-   };
+      return data;
+   }
 
+   async getUrlFromManifestItem(o) {
+      const headUrl = `https://xartest.ondemand.sas.com/lsaf/rest/repository/items${o["repository-file"][0]._}?` +
+                  `&id=${o["repository-file"][0].$.id}` +
+                  `&` +
+                  `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
+                  ;
+      
+      const contentsUrl =  `https://xartest.ondemand.sas.com/lsaf/rest/repository/items/contents${o["repository-file"][0]._}?` +
+                           `&id=${o["repository-file"][0].$.id}` +
+                           `&` +
+                           `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
+                           ;
+      let exists = false;
+      try {
+         const headResponse = await axios.head(headUrl, { headers: { "X-Auth-Token": this.authToken }, maxRedirects: 5 });
+         if (headResponse.status === 200) {
+            exists = true;
+         }
+      } catch(error) {
+         debugger;
+         console.log(error);
+      }
+      return {contentsUrl, exists};
+   }
 
-}
+} // End of Class RestApi definition
 
 
 module.exports = { RestApi };
