@@ -364,7 +364,6 @@ async function restApiSubmitJob(param) {
       }
       const submitThisJob = true;
       let jobData = await restApi.getRemoteJobParameters(param, submitThisJob);
-      debugger;
       console.log(jobData);
    } catch (err) {
       console.log(err);
