@@ -171,57 +171,110 @@ function generateTable(obj, editable, parentKey = '') {
 
 function generateArrayTable(arr, editable, parentKey = '') {
    if (!arr.length || typeof arr[0] !== 'object') return ''; // Handle if array is empty or not an array of objects
-
-   let html = '<table style="width: 100%;">';
-
-   arr.forEach((item, index) => {
-      // html += `<h3>Item ${index + 1}</h3>`; // Add a header for each object in the array
-      // Start a new nested table for each object
-      html += `
-         <table style="width: 100%;">
-            <colgroup>
-               <col style="width: 30%;">
-               <col style="width: 70%;">
-            </colgroup>
-         `;       
-      // html += `<tr><th style="width: 20%;">Key</th><th style="width: 80%;">Value</th></tr>`; // Two columns for each object
-
-      for (const [key, value] of Object.entries(item)) {
-         const fullKey = `${parentKey}[${index}].${key}`.replace(/</g, '&lt;').replace(/>/g, '&gt;'); // Generate unique key for input names
-
-         if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-               // Directly display primitive values in the second column
-               if (editable) {
-                  html += `<tr>
-                     <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                     <td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
-                        >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>
-                  </tr>`;
-               } else {
-                  html += `<tr>
-                     <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                     <td class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" 
-                        >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                  </tr>`;
-               }
-         } else if (Array.isArray(value)) {
-               // Nested arrays of objects
-               html += `<tr>
-                  <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                  <td>${generateArrayTable(value, editable, fullKey)}</td>
-               </tr>`;
-         } else if (typeof value === 'object' && value !== null) {
-               // Nested objects
-               html += `<tr>
-                  <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                  <td>${generateTable(value, editable, fullKey)}</td>
-               </tr>`;
-         }
+   debugger;
+   let isEachItemObject = true;
+   let objKeysNum_min, objKeysNum_max; 
+   arr.forEach(item => {
+      isEachItemObject = isEachItemObject && typeof item === 'object' && item != null;
+      if (typeof item === 'object' && item != null) {
+         const objKeysNum = Object.keys(item).length;
+         objKeysNum_min = ! objKeysNum_min ? objKeysNum : (objKeysNum < objKeysNum_min ? objKeysNum : objKeysNum_min);
+         objKeysNum_max = ! objKeysNum_max ? objKeysNum : (objKeysNum > objKeysNum_max ? objKeysNum : objKeysNum_max);
       }
-
-      html += '</table>'; // End the table for this object
    });
+   let html;
+   const columns = [...arr].reduce((acc, row) => [...(new Set([...acc, ...Object.keys(row)]))], []);
+   if (columns.length > 1 && isEachItemObject && objKeysNum_max > 1) {
+      // Display a 2D table if array has >1 items, each array item is an object, and at least one item object has >1 properties
+      html = '<table style="min-width: 100%;">';
+      html += `<thead>
+                  <tr>
+                     <th>#</th>`;
+      html += columns.map(colName => `<th>${colName}</th>`).join('');
+      html += `   </tr>
+               </thead>
+               <tbody>
+                  `;
+      arr.forEach((item, index) => {
+         html += `<tr><td>${index+1}</td>`;
+         for (const key of columns) {
+            const fullKey = `${parentKey}[${index}].${key}`.replace(/</g, '&lt;').replace(/>/g, '&gt;'); // Generate unique key for input names
+            const value = item[key] || '';
+            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                  // Directly display primitive values in the second column
+                  if (editable) {
+                     html += `<td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
+                           >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>`;
+                  } else {
+                     html += `<td class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" 
+                           >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+                  }
+            } else if (Array.isArray(value)) {
+                  // Nested arrays of objects
+                  html += `<td>${generateArrayTable(value, editable, fullKey)}</td>`;
+            } else if (typeof value === 'object' && value !== null) {
+                  // Nested objects
+                  html += `<td>${generateTable(value, editable, fullKey)}</td>`;
+            }
+         }
+         html += `</tr>`;
 
+         // html += '</table>'; // End the table for this object
+      });
+
+      html += `</tbody></table>`;
+
+   } else {
+      html = '<table style="width: 100%;">';
+
+      arr.forEach((item, index) => {
+         // html += `<h3>Item ${index + 1}</h3>`; // Add a header for each object in the array
+         // Start a new nested table for each object
+         html += `
+            <table style="width: 100%;">
+               <colgroup>
+                  <col style="width: 30%;">
+                  <col style="width: 70%;">
+               </colgroup>
+            `;       
+         // html += `<tr><th style="width: 20%;">Key</th><th style="width: 80%;">Value</th></tr>`; // Two columns for each object
+
+         for (const [key, value] of Object.entries(item)) {
+            const fullKey = `${parentKey}[${index}].${key}`.replace(/</g, '&lt;').replace(/>/g, '&gt;'); // Generate unique key for input names
+
+            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                  // Directly display primitive values in the second column
+                  if (editable) {
+                     html += `<tr>
+                        <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                        <td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
+                           >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>
+                     </tr>`;
+                  } else {
+                     html += `<tr>
+                        <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                        <td class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" 
+                           >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                     </tr>`;
+                  }
+            } else if (Array.isArray(value)) {
+                  // Nested arrays of objects
+                  html += `<tr>
+                     <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                     <td>${generateArrayTable(value, editable, fullKey)}</td>
+                  </tr>`;
+            } else if (typeof value === 'object' && value !== null) {
+                  // Nested objects
+                  html += `<tr>
+                     <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                     <td>${generateTable(value, editable, fullKey)}</td>
+                  </tr>`;
+            }
+         }
+
+         html += '</table>'; // End the table for this object
+      });
+   }
    return html;
 }
 
