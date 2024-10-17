@@ -1,7 +1,13 @@
 const vscode = require("vscode");
 
 // This is the async function that opens a webview and displays an object / collects edits from the user
-async function getObjectView(inputObject = {}, editable = false, title = "Object Viewer", titleShort = "Object Viewer") {
+async function getObjectView(
+   inputObject = {},
+   editable = false,
+   title = "Object Viewer",
+   titleShort = "Object Viewer",
+   restApi = null
+) {
    return new Promise((resolve, reject) => {
       // Create and show a new webview panel
       const panel = vscode.window.createWebviewPanel(
@@ -50,6 +56,40 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                   console.log('(getObjectView) Rejecting Promise with undefined Object:', updatedObject);
                   reject("Cancelled");
                   panel.dispose(); // Close the webview panel
+               break;
+               case('openLink'):
+                  debugger;
+                  let url;
+                  try {
+                     url = new URL(message.url);
+                     console.log('openLink:', url.href);
+                     debugger;
+                     if (restApi && restApi.logon && restApi.getRemoteFileContents && restApi.viewFileContents) {
+                        const host = url.hostname;
+                        if (/^\w+(-\w+)?\.ondemand\.sas\.com$/.test(host)) {
+                           restApi.host = host;
+                        } else {
+                           debugger;
+                           console.error(`(getObjectView): openLink: Unexpected host: ${host}`);
+                        }
+                        restApi.logon();
+                        const requestOptions = {
+                           headers: {
+                              "X-Auth-Token": restApi.authToken
+                           },
+                           maxRedirects: 5 // Optional, axios follows redirects by default
+                        };
+                        restApi.downloadFile(url, requestOptions).then(p => {
+                           console.log(p); 
+                           restApi.viewFileContents();
+                        }
+                        ).catch(err => {
+                           console.log(err);
+                        })
+                     }
+                  } catch (error) {
+                     console.log('(openLink) Error:', error);
+                  }
                break;
                default:
                   debugger;
@@ -147,6 +187,17 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                   const updatedObject = ${editable ? 'gatherFormData()' : 'null'};
                   vscode.postMessage({
                      command: 'cancel'
+                  });
+               });
+
+               
+               document.querySelectorAll('a').forEach(link => {
+                  link.addEventListener('click', event => {
+                     event.preventDefault();
+                     vscode.postMessage({
+                        command: 'openLink',
+                        url: link.href
+                     });
                   });
                });
 
@@ -394,7 +445,7 @@ function generateArrayTable(arr, editable, parentKey = '') {
    return html;
 }
 
-
+console.log('(object-view.js) typeof getObjectView:', typeof getObjectView);
 
 // Export the function so it can be imported in other files
 module.exports = {
