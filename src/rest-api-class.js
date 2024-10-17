@@ -1078,7 +1078,8 @@ class RestApi {
                .map(p => ({ defaultValue:p._, ...p.$}))
                .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
          }
-         const editableParams = jobParams.map(p => ({[`[${p.name}] ${p.label}:`]: p.value, includeSubFolders: p.includeSubFolders}));
+         // const editableParams = jobParams.map(p => ({[`[${p.name}] ${p.label}:`]: p.value, includeSubFolders: p.includeSubFolders}));
+         const editableParams = jobParams.map(p => ({[`[${p.name}] ${p.label}:`]: p.value}));
          console.log('(getRemoteJobParameters) jobParams:\n', jobParams);
          console.log('(getRemoteJobParameters) editableParams:\n', editableParams);
          let newParams = undefined;
@@ -1095,9 +1096,14 @@ class RestApi {
          }
          return newParams;
       } catch (error) {
-         console.log('(getRemoteJobParameters) error:', error);
-         debugger;
-         vscode.window.showErrorMessage('(getRemoteJobParameters) error:', error);
+         if (error === "Cancelled" || error?.message === "Cancelled") {
+            console.log('(getRemoteJobParameters) Cancelling.');
+            vscode.window.showErrorMessage('(getRemoteJobParameters) Cancelling.');
+         } else {
+            console.log('(getRemoteJobParameters) error:', error);
+            debugger;
+            vscode.window.showErrorMessage('(getRemoteJobParameters) error:', error);
+         }
       }
    }
 
@@ -1721,6 +1727,7 @@ class RestApi {
       const jobPathPrefix = urlPath.replace(/^\/jobs\/(workspace|repository)/, '');
       console.log('submitHost:', submitHost, 'jobType:', jobType, 'urlPath:', urlPath, 'jobPathPrefix:', jobPathPrefix);
       const jobPath = this.remoteFile;
+      const jobName = path.basename(jobPath);
       const fullJobPath = jobPathPrefix + jobPath;
       console.log('fullJobPath:', fullJobPath);
       let apiRequest = `${urlPath}${encodeURI(jobPath)}?action=run`;
@@ -1752,6 +1759,8 @@ class RestApi {
       let message;
       let submissionId;
       let data;
+      let prev_message = '';
+      let submitStarted = new Date();
       const intervalId = setInterval(async () => {
          if (requestOptions.url) {
             try {
@@ -1805,40 +1814,46 @@ class RestApi {
                   result = response.data;
                }
                if (status?.type === 'FAILURE') {
-                  message = `${jobType} job "${fullJobPath}" submission failed: ` + status?.message || result;
+                  message = `${jobType} job "${jobName}" submission **failed**:\n\n` + (status?.message || result) + `\n\nat ${fullJobPath}`;
                   clearInterval(intervalId);
                } else if (status?.type === 'CANCELED') {
-                  message = `${jobType} job "${fullJobPath}" submission canceled: ` + status?.message || result;
+                  message = `${jobType} job "${jobName}" submission **canceled**:\n\n` + (status?.message || result) + `\n\nat ${fullJobPath}`;
                   clearInterval(intervalId);
                } else if (status?.type === 'COMPLETED') {
-                  message = `${jobType} job "${fullJobPath}" submitted: ` + status?.message || result;
-                  clearInterval(intervalId);
-                  const location = `${jobType || 'repository'}`
-                     .replace(/^repo$/, 'repository')
-                     .replace(/^work$/, 'workspace')
-                     ;
-                  this.manifest = await this.getJobSubmissionManifest(submissionId, location);
-                  const editable = false;
-                  debugger;
-                  if (this.manifest){
-                     try{
-                        await getObjectView(this.manifest, editable, "Job Submission Manifest", "Job Submission Manifest");
-                     } catch(error) {
-                        debugger;
-                        console.log('(submitJob) Error in getObjectView():', error);
-                     }
+                  const submitCompleted = new Date();
+                  const diffInMs = submitCompleted - submitStarted ;
+                  const diffInSeconds = Math.floor(diffInMs / 1000);
+                  const diffInMinutes = Math.floor(diffInSeconds / 60);
+                  const diffInHours = Math.floor(diffInMinutes / 60);
+                  const diffInDays = Math.floor(diffInHours / 24);
+
+                  const hours = diffInHours % 24;
+                  const minutes = diffInMinutes % 60;
+                  const seconds = diffInSeconds % 60;
+                  let duration;
+                  if (diffInDays) {
+                     duration = `${diffInDays} days, ${hours} hours`;
+                  } else if (hours) {
+                     duration = `${hours} hours, ${minutes} minutes`;
+                  } else if (minutes) {
+                     duration = `${minutes} minutes, ${seconds} seconds`;
+                  } else if (seconds) {
+                     duration = `${seconds} seconds`;
+                  } else {
+                     duration = `${diffInMs} milliseconds`;
                   }
-                  console.log('this.manifest:', beautify(JSON.stringify(this.manifest)));
-                  console.log('done');
+                  console.log(`Completed after: ${duration}`);
+                  message = `${jobType} job "${jobName}" *completed* in ${duration}:\n\n` + (status?.message || result) + `\n\nat ${fullJobPath}`;
+                  clearInterval(intervalId);
                } else {
                   if (status?.type === 'STARTED') {
-                     message = `${jobType} job "${fullJobPath}" started: ` + status?.message || result;
+                     message = `${jobType} job "${jobName}" started:` + (status?.message || result) + `\n\nat ${fullJobPath}`;
                   } else if (status?.type === 'RUNNING') {
-                     message = `${jobType} job "${fullJobPath}" running: ` + status?.message || result;
+                     message = `${jobType} job "${jobName}" running: ` + (status?.message || result) + `\n\nat ${fullJobPath}`;
                   } else if (status?.type === 'PUBLISHING') {
-                     message = `${jobType} job "${fullJobPath}" publishing: ` + status?.message || result;
+                     message = `${jobType} job "${jobName}" publishing: ` + (status?.message || result) + `\n\nat ${fullJobPath}`;
                   } else {
-                     message = `${jobType} job "${fullJobPath}" Status type: ${status?.type} ` + status?.message || result;
+                     message = `${jobType} job "${jobName}" Status type: ${status?.type} ` + (status?.message || result) + `\n\nat ${fullJobPath}`;
                      debugger;
                      console.log(message);
                   }
@@ -1846,11 +1861,42 @@ class RestApi {
                console.log('submissionId:', submissionId);
                console.log('  result:', result);
                console.log('  '+message);
-               vscode.window.showInformationMessage(message);
+               if (message !== prev_message) {
+                  if (/with program errors/i.test(message)) {
+                     vscode.window.showErrorMessage(message);
+                  } else if (/with program warnings/i.test(message)) {
+                     vscode.window.showWarningMessage(message);
+                  } else {
+                     vscode.window.showInformationMessage(message);
+                  }
+               }
+               prev_message = message;
+               if (status?.type === 'COMPLETED') {
+                  const location = `${jobType || 'repository'}`
+                     .replace(/^repo$/, 'repository')
+                     .replace(/^work$/, 'workspace')
+                     ;
+                  this.manifest = await this.getJobSubmissionManifest(submissionId, location);
+                  const editable = false;
+                  if (this.manifest){
+                     try{
+                        await getObjectView(this.manifest, editable, "Job Submission Manifest", "Job Submission Manifest");
+                     } catch(error) {
+                        debugger;
+                        if (error === "cancelled") {
+                           console.log('(submitJob) Cancelled.');
+                        } else {
+                           console.log('(submitJob) Error in getObjectView():', error);
+                        }
+                     }
+                  }
+                  console.log('this.manifest:', beautify(JSON.stringify(this.manifest)));
+                  console.log('done');
+               }
             } catch (error) {
-               vscode.window.showErrorMessage(`Error submitting ${jobType} job "${fullJobPath || argJob}":`, error);
+               vscode.window.showErrorMessage(`Error submitting ${jobType} job ${jobName} at "${fullJobPath || argJob}":`, error);
                debugger;
-               console.error(`Error submitting ${jobType} job "${fullJobPath || argJob}":`, error);
+               console.error(`Error submitting ${jobType} job ${jobName} at "${fullJobPath || argJob}":`, error);
             }
          }
       }, 3000)
@@ -2009,7 +2055,7 @@ class RestApi {
       return data;
    }
 
-   async getUrlFromManifestItem(o) {
+   async getUrlFromManifestItem(o, retry=2) {
       const headUrl = `https://xartest.ondemand.sas.com/lsaf/rest/repository/items${o["repository-file"][0]._}?` +
                   `&id=${o["repository-file"][0].$.id}` +
                   `&` +
@@ -2028,8 +2074,14 @@ class RestApi {
             exists = true;
          }
       } catch(error) {
-         debugger;
-         console.log(error);
+         if (error.code === "ECONNRESET" && retry > 0) {
+            retry = retry -1;
+            this.logon();
+            return this.getUrlFromManifestItem(o, retry);
+         } else {
+            debugger;
+            console.log(error);
+         }
       }
       return {contentsUrl, exists};
    }
