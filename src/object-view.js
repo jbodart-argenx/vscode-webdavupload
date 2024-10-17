@@ -19,9 +19,10 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
       // Handle messages from the webview
       panel.webview.onDidReceiveMessage(
          message => {
+            let updatedObject;
             switch (message.command) {
                case 'submit':
-                     let updatedObject = undefined;
+                     updatedObject = undefined;
                      if (editable) {
                         // Return the updated object
                         vscode.window.showInformationMessage('Updated object submitted');
@@ -35,6 +36,21 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                      resolve(updatedObject);
                      panel.dispose(); // Close the webview panel
                   break;
+               case 'cancel':
+                  updatedObject = undefined;
+                  if (editable) {
+                     // Return the updated object
+                     vscode.window.showInformationMessage('Object cancelled');
+                     updatedObject = {message: "Cancelled"};
+                     console.log('Updated Object:', updatedObject);
+                  } else {
+                     vscode.window.showInformationMessage('Read-only object cancelled');
+                     console.log('Original Object:', inputObject);
+                  }
+                  console.log('(getObjectView) Rejecting Promise with undefined Object:', updatedObject);
+                  reject("Cancelled");
+                  panel.dispose(); // Close the webview panel
+               break;
                default:
                   debugger;
                   console.log('(getObjectView) Rejecting Promise for unexpected message:', message);
@@ -55,6 +71,24 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
 }
 
 
+function alignValue(value) {
+   try{
+      value = Number(value);
+      return value ? ' text-align : right;' : '';
+   } catch (_){
+      return '';
+   }
+}
+
+function showValue(value) {
+   const valueStr = value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;');
+   try {
+      const urlValue = new URL(value);
+      return `<a href="${urlValue.href}">${valueStr}</a>`;
+   } catch (_) {
+      return valueStr;
+   }
+}
 
 // HTML generation logic
 function getWebviewContent(inputObject, editable = false, title = "Object Viewer", titleShort = "Object Viewer") {
@@ -64,7 +98,7 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
       <head>
          <meta charset="UTF-8">
          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-         <title>${titleShort.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
+         <title>${showValue(titleShort)}</title>
          <style>
                table {
                   width: 100%;
@@ -81,6 +115,8 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                textarea {
                   margin: 0;
                   padding: 2px;
+                  width: calc(100% - 4px);  
+                  resize: both;  
                }
                .nested-table {
                   margin-left: 10px;
@@ -89,15 +125,28 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
       </head>
       <body>
          <h1>${title.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h1>
-         ${Array.isArray(inputObject) ? generateArrayTable(inputObject, editable) : generateTable(inputObject, editable)}
-         <button id="submitBtn">Submit</button>
+         ${Array.isArray(inputObject) ? 
+            generateArrayTable(inputObject, editable) : 
+            generateTable(inputObject, editable)
+         }
+         ${editable ?
+         '<button id="submitBtn">Submit</button> <button id="cancelBtn">Cancel</button>' :
+         '<button id="cancelBtn">Dismiss</button>' }
          <script>
                const vscode = acquireVsCodeApi();
+         ` + (editable ? `
                document.getElementById('submitBtn').addEventListener('click', () => {
                   const updatedObject = ${editable ? 'gatherFormData()' : 'null'};
                   vscode.postMessage({
                      command: 'submit',
                      updatedObject: updatedObject
+                  });
+               });
+         ` : ``) + `
+               document.getElementById('cancelBtn').addEventListener('click', () => {
+                  const updatedObject = ${editable ? 'gatherFormData()' : 'null'};
+                  vscode.postMessage({
+                     command: 'cancel'
                   });
                });
 
@@ -123,10 +172,10 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
 
 function generateTable(obj, editable, parentKey = '') {
    let html = `
-   <table style="width: 100%;">
+   <table style="width: 20%; table-layout: auto;">
       <colgroup>
-         <col style="width: 30%;">
-         <col style="width: 70%;">
+         <col style="width: 10%;">
+         <col style="width: 80%;">
       </colgroup>
    `;                
    // html += `<tr><th style="width: 20%;">Key</th><th style="width: 80%;">Value</th></tr>`;  // Two columns with flexible widths
@@ -137,27 +186,27 @@ function generateTable(obj, editable, parentKey = '') {
          // Directly display primitive values in the second column
          if (editable) {
             html += `<tr>
-                  <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                  <td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
+                  <th style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</th>
+                  <td><textarea class="value" name="${fullKey}" style="white-space: pre-wrap;" 
                      >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>
                </tr>`;
          } else {
             html += `<tr>
-                  <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                  <td class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" 
-                     >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                  <th style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</th>
+                  <td class="value" name="${fullKey}" style="white-space: pre-wrap; ${parentKey === '' ? '' : alignValue(value)}" 
+                     >${showValue(value)}</td>
                </tr>`;
          }
       } else if (Array.isArray(value)) {
          // Display array of objects inside the second column
          html += `<tr>
-               <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+               <th style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</th>
                <td>${generateArrayTable(value, editable, fullKey)}</td>
          </tr>`;
       } else if (typeof value === 'object' && value !== null) {
          // Display nested objects in the second column
          html += `<tr>
-               <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+               <th style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</th>
                <td>${generateTable(value, editable, fullKey)}</td>
          </tr>`;
       }
@@ -171,7 +220,6 @@ function generateTable(obj, editable, parentKey = '') {
 
 function generateArrayTable(arr, editable, parentKey = '') {
    if (!arr.length || typeof arr[0] !== 'object') return ''; // Handle if array is empty or not an array of objects
-   debugger;
    let isEachItemObject = true;
    let objKeysNum_min, objKeysNum_max; 
    arr.forEach(item => {
@@ -186,28 +234,32 @@ function generateArrayTable(arr, editable, parentKey = '') {
    const columns = [...arr].reduce((acc, row) => [...(new Set([...acc, ...Object.keys(row)]))], []);
    if (columns.length > 1 && isEachItemObject && objKeysNum_max > 1) {
       // Display a 2D table if array has >1 items, each array item is an object, and at least one item object has >1 properties
-      html = '<table style="min-width: 100%;">';
+      if (editable) {
+         html = '<table style="width: 100%;  table-layout: auto;">';
+      } else {
+         html = '<table style="width: 20%;  table-layout: auto;">';
+      }
       html += `<thead>
                   <tr>
-                     <th>#</th>`;
+                     <th>n=${arr.length}</th>`;
       html += columns.map(colName => `<th>${colName}</th>`).join('');
       html += `   </tr>
                </thead>
                <tbody>
                   `;
       arr.forEach((item, index) => {
-         html += `<tr><td>${index+1}</td>`;
+         html += `<tr><th>${index+1}</th>`;
          for (const key of columns) {
             const fullKey = `${parentKey}[${index}].${key}`.replace(/</g, '&lt;').replace(/>/g, '&gt;'); // Generate unique key for input names
             const value = item[key] || '';
             if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
                   // Directly display primitive values in the second column
                   if (editable) {
-                     html += `<td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
+                     html += `<td><textarea class="value" name="${fullKey}" style="white-space: pre-wrap;"
                            >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>`;
                   } else {
-                     html += `<td class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" 
-                           >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+                     html += `<td class="value" name="${fullKey}" style="white-space: pre-wrap; ${parentKey === '' ? '' : alignValue(value)}" 
+                           >${showValue(value)}</td>`;
                   }
             } else if (Array.isArray(value)) {
                   // Nested arrays of objects
@@ -225,16 +277,16 @@ function generateArrayTable(arr, editable, parentKey = '') {
       html += `</tbody></table>`;
 
    } else {
-      html = '<table style="width: 100%;">';
+      html = '<table style="width: 20%;  table-layout: auto;">';
 
       arr.forEach((item, index) => {
          // html += `<h3>Item ${index + 1}</h3>`; // Add a header for each object in the array
          // Start a new nested table for each object
          html += `
-            <table style="width: 100%;">
+            <table style="width: 20%; table-layout: auto;">
                <colgroup>
-                  <col style="width: 30%;">
-                  <col style="width: 70%;">
+                  <col style="width: 10%;">
+                  <col style="width: 50%;">
                </colgroup>
             `;       
          // html += `<tr><th style="width: 20%;">Key</th><th style="width: 80%;">Value</th></tr>`; // Two columns for each object
@@ -246,27 +298,27 @@ function generateArrayTable(arr, editable, parentKey = '') {
                   // Directly display primitive values in the second column
                   if (editable) {
                      html += `<tr>
-                        <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                        <td><textarea class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" ${editable ? '' : 'readonly'}
+                        <th style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</th>
+                        <td><textarea class="value" name="${fullKey}" style="white-space: pre-wrap;"
                            >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></td>
                      </tr>`;
                   } else {
                      html += `<tr>
-                        <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-                        <td class="value" name="${fullKey}" style="width: 100%; white-space: pre-wrap;" 
-                           >${value.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                        <th style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</th>
+                        <td class="value" name="${fullKey}" style="white-space: pre-wrap; ${parentKey === '' ? '' : alignValue(value)}" 
+                           >${showValue(value)}</td>
                      </tr>`;
                   }
             } else if (Array.isArray(value)) {
                   // Nested arrays of objects
                   html += `<tr>
-                     <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                     <th style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</th>
                      <td>${generateArrayTable(value, editable, fullKey)}</td>
                   </tr>`;
             } else if (typeof value === 'object' && value !== null) {
                   // Nested objects
                   html += `<tr>
-                     <td style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                     <th style="padding-right: 10px;">${key.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</th>
                      <td>${generateTable(value, editable, fullKey)}</td>
                   </tr>`;
             }
