@@ -150,6 +150,22 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                   });
                });
 
+               document.body.addEventListener('click', function(event) {
+                  if (event.target.tagName === 'TH') {
+                     const table = event.target.closest('table');
+                     if (table) {
+                        // Ensure the <th> is in the first row of the table
+                        const firstRow = table.querySelector('thead tr');
+                        if (event.target.parentNode === firstRow) {
+                           // Determine the column index of the clicked header
+                           const columnIndex = Array.from(event.target.parentNode.children).indexOf(event.target);
+                           console.log('Clicked Column Index:', columnIndex);
+                           sortTable(table, columnIndex);
+                        }
+                     }
+                  }
+               });
+
                function gatherFormData() {
                   const formData = {};
                   document.querySelectorAll('.value').forEach(input => {
@@ -162,6 +178,62 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                      ref[keys[keys.length - 1]] = input.value;
                   });
                   return formData;
+               }
+
+               function sortTable(table, colIndex) {
+                  let switching = true, rows, i, x, y, xVal, yVal, shouldSwitch, dir = "asc", switchCount = 0;
+                  while (switching) {
+                     switching = false;
+                     rows = table.rows;
+                     for (i = 1; i < (rows.length - 1); i++) {
+                        shouldSwitch = false;
+                        x = rows[i].querySelectorAll("th, td")[colIndex];
+                        y = rows[i + 1].querySelectorAll("th, td")[colIndex];
+                        xVal = (x?.textContent || '').trim().toLowerCase();
+                        yVal = (y?.textContent || '').trim().toLowerCase();
+
+                        // Check if both values are numeric
+                        const xNum = xVal === '' ? -1 : parseFloat(xVal);
+                        const yNum = yVal === '' ? -1 : parseFloat(yVal);
+                        const bothNumeric = !isNaN(xNum) && !isNaN(yNum)  && !xVal.match(/[^\\d]/i);                     
+
+                        if (dir === "asc") {
+                           if (bothNumeric) {
+                              if (xNum > yNum) {
+                                 shouldSwitch = true;
+                                 break;
+                              }
+                           } else {
+                              if (xVal > yVal) {
+                                 shouldSwitch = true;
+                                 break;
+                              }
+                           }
+                        } else if (dir === "desc") {
+                           if (bothNumeric) {
+                              if (xNum < yNum) {
+                                 shouldSwitch = true;
+                                 break;
+                              }
+                           } else {
+                              if (xVal < yVal) {
+                                 shouldSwitch = true;
+                                 break;
+                              }
+                           }
+                        }
+                     }
+                     if (shouldSwitch) {
+                        rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                        switching = true;
+                        switchCount++;
+                     } else {
+                        if (switchCount === 0 && dir === "asc") {
+                        dir = "desc";
+                        switching = true;
+                        }
+                     }
+                  }
                }
          </script>
       </body>
