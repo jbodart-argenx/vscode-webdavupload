@@ -181,60 +181,52 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                }
 
                function sortTable(table, colIndex) {
-                  let switching = true, rows, i, x, y, xVal, yVal, shouldSwitch, dir = "asc", switchCount = 0;
-                  while (switching) {
-                     switching = false;
-                     rows = table.rows;
-                     for (i = 1; i < (rows.length - 1); i++) {
-                        shouldSwitch = false;
-                        x = rows[i].querySelectorAll("th, td")[colIndex];
-                        y = rows[i + 1].querySelectorAll("th, td")[colIndex];
-                        xVal = (x?.textContent || '').trim().toLowerCase();
-                        yVal = (y?.textContent || '').trim().toLowerCase();
+                  // Convert the HTMLCollection of rows to an array and skip the header row
+                  const rows = Array.from(table.rows).slice(1);
 
-                        // Check if both values are numeric
-                        const xNum = xVal === '' ? -1 : parseFloat(xVal);
-                        const yNum = yVal === '' ? -1 : parseFloat(yVal);
-                        const bothNumeric = !isNaN(xNum) && !isNaN(yNum)  && !xVal.match(/[^\\d]/i);                     
+                  // Determine the sorting direction: toggle between 'asc' and 'desc'
+                  const dir = table.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+                  table.dataset.sortDir = dir;
 
-                        if (dir === "asc") {
-                           if (bothNumeric) {
-                              if (xNum > yNum) {
-                                 shouldSwitch = true;
-                                 break;
-                              }
-                           } else {
-                              if (xVal > yVal) {
-                                 shouldSwitch = true;
-                                 break;
-                              }
-                           }
-                        } else if (dir === "desc") {
-                           if (bothNumeric) {
-                              if (xNum < yNum) {
-                                 shouldSwitch = true;
-                                 break;
-                              }
-                           } else {
-                              if (xVal < yVal) {
-                                 shouldSwitch = true;
-                                 break;
-                              }
-                           }
-                        }
-                     }
-                     if (shouldSwitch) {
-                        rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                        switching = true;
-                        switchCount++;
+                  // Sort the rows array
+                  rows.sort((rowA, rowB) => {
+                     // Get the text content of the cells in the specified column, trim and convert to lowercase
+                     const cellA = rowA.querySelectorAll("th, td")[colIndex].textContent.trim().toLowerCase();
+                     const cellB = rowB.querySelectorAll("th, td")[colIndex].textContent.trim().toLowerCase();
+
+                     // Convert the cell values to numbers if possible
+                     const numA = parseFloat(cellA);
+                     const numB = parseFloat(cellB);
+                     const bothNumeric = !isNaN(numA) && !isNaN(numB);
+
+                     // Check if the values are valid ISO dates
+                     const dateA = new Date(cellA);
+                     const dateB = new Date(cellB);
+                     const bothDates = !isNaN(dateA) && !isNaN(dateB);
+
+                     // Compare the cell values based on the sorting direction
+                     if (bothDates) {
+                           // Date comparison
+                           return dir === 'asc' ? dateA - dateB : dateB - dateA;
+                     } else if (bothNumeric) {
+                           // Numeric comparison
+                           return dir === 'asc' ? numA - numB : numB - numA;
                      } else {
-                        if (switchCount === 0 && dir === "asc") {
-                        dir = "desc";
-                        switching = true;
-                        }
+                           // Textual comparison
+                           return dir === 'asc' ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
                      }
-                  }
+                  });
+
+                  // Create a DocumentFragment to minimize reflows and repaints
+                  const fragment = document.createDocumentFragment();
+
+                  // Append each sorted row to the fragment
+                  rows.forEach(row => fragment.appendChild(row));
+
+                  // Append the fragment to the table body
+                  table.tBodies[0].appendChild(fragment);
                }
+
          </script>
       </body>
       </html>
