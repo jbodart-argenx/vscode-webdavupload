@@ -19,6 +19,8 @@ const axios = require('axios');
 const xml2js = require('xml2js');
 const { getObjectView } = require("./object-view.js");
 
+console.log('(rest-api-class.js) typeof getObjectView:', typeof getObjectView);
+
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
 
 const tmp = require("tmp");
@@ -396,6 +398,10 @@ class RestApi {
       if (typeof param === 'string') {
          param = vscode.Uri.file(param);
       }
+      if (param instanceof URL) {
+         param = vscode.Uri.from(param);
+         debugger;
+      }
       if (param instanceof vscode.Uri) {
          this.localFile = param.fsPath;
       }
@@ -458,69 +464,71 @@ class RestApi {
          };
          try {
             // const response = await fetch(apiUrl + apiRequest, requestOptions);
-            const fullUrl = encodeURI(apiUrl + apiRequest);            
-            let response = null;
-            response = await axios.head(fullUrl, requestOptions);
-            const contentType = response.headers['content-type'];
-            const contentLength = response.headers['content-length'];
-            console.log('contentType:', contentType, 'contentLength:', contentLength);
-            let result = null;
-            let data = null;
-            let responseType = null;
-            if (contentType.match(/\bjson\b/)) {
-               responseType = 'json';
-            }
-            else if (contentLength && contentLength < 100_000_000) {
-               if (
-                  /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
-                  || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
-               ) {
-                  responseType = 'text';
-               } else {
-                  responseType = 'arraybuffer';
-               }
-            }
-            if (responseType) {
-               response = await axios.get(fullUrl, {...requestOptions, responseType});
-            }
-            if (response.status != 200) {
-               if (contentType.match(/\bjson\b/)) {
-                  data = response.data;
-                  if (data.message) {
-                     result = data.details || data.message;
-                     if (data.remediation && data.remediation !== "No remediation message is available.") {
-                        result = `${result.trim()}, remediation: ${data.remediation}`;
-                     }
-                  } else {
-                     result = beautify(JSON.stringify(data), {
-                        indent_size: 2,
-                        space_in_empty_paren: true,
-                     });
-                  }
-               } else {
-                  result = response.data;
-                  result = `${response.status}, ${response.statusText}: Result: ${result}`;
-               }
-               throw new Error(`HTTP error! ${result}`);
-            }
-            if (contentLength && contentLength < 100_000_000) {
-               if (
-                  /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
-                  || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
-               ) {
-                  const responseText = response.data;
-                  this.fileContents.push(responseText);
-               } else  {
-                  // throw new Error(`File with content-length: ${contentLength} NOT downloaded given unexpected content-type: ${contentType}!`)
-                  const arrayBuffer = response.data;
-                  this.fileContents.push(Buffer.from(arrayBuffer));
-               }
-               this.fileVersions.push(selectedVersions[i]?.label || '');
-               this.fileContentLength.push(contentLength);
-               this.fileContentType.push(contentType);
-            } else {
-               throw new Error(`File with content-type: ${contentType} NOT downloaded given unexpected content-length: ${contentLength}!`)
-            }
+            const fullUrl = encodeURI(apiUrl + apiRequest);  
+            const selectedVersionLabel = selectedVersions[i]?.label || ''; 
+            this.downloadFile(fullUrl, requestOptions, selectedVersionLabel);       
+            // let response = null;
+            // response = await axios.head(fullUrl, requestOptions);
+            // const contentType = response.headers['content-type'];
+            // const contentLength = response.headers['content-length'];
+            // console.log('contentType:', contentType, 'contentLength:', contentLength);
+            // let result = null;
+            // let data = null;
+            // let responseType = null;
+            // if (contentType.match(/\bjson\b/)) {
+            //    responseType = 'json';
+            // }
+            // else if (contentLength && contentLength < 100_000_000) {
+            //    if (
+            //       /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
+            //       || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
+            //    ) {
+            //       responseType = 'text';
+            //    } else {
+            //       responseType = 'arraybuffer';
+            //    }
+            // }
+            // if (responseType) {
+            //    response = await axios.get(fullUrl, {...requestOptions, responseType});
+            // }
+            // if (response.status != 200) {
+            //    if (contentType.match(/\bjson\b/)) {
+            //       data = response.data;
+            //       if (data.message) {
+            //          result = data.details || data.message;
+            //          if (data.remediation && data.remediation !== "No remediation message is available.") {
+            //             result = `${result.trim()}, remediation: ${data.remediation}`;
+            //          }
+            //       } else {
+            //          result = beautify(JSON.stringify(data), {
+            //             indent_size: 2,
+            //             space_in_empty_paren: true,
+            //          });
+            //       }
+            //    } else {
+            //       result = response.data;
+            //       result = `${response.status}, ${response.statusText}: Result: ${result}`;
+            //    }
+            //    throw new Error(`HTTP error! ${result}`);
+            // }
+            // if (contentLength && contentLength < 100_000_000) {
+            //    if (
+            //       /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
+            //       || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
+            //    ) {
+            //       const responseText = response.data;
+            //       this.fileContents.push(responseText);
+            //    } else  {
+            //       // throw new Error(`File with content-length: ${contentLength} NOT downloaded given unexpected content-type: ${contentType}!`)
+            //       const arrayBuffer = response.data;
+            //       this.fileContents.push(Buffer.from(arrayBuffer));
+            //    }
+            //    this.fileVersions.push(selectedVersions[i]?.label || '');
+            //    this.fileContentLength.push(contentLength);
+            //    this.fileContentType.push(contentType);
+            // } else {
+            //    throw new Error(`File with content-type: ${contentType} NOT downloaded given unexpected content-length: ${contentLength}!`)
+            // }
          } catch (error) {
             console.error("Error fetching Remote File Contents:", error);
             vscode.window.showErrorMessage("Error fetching Remote File Contents:", error.message);
@@ -528,6 +536,78 @@ class RestApi {
             this.fileVersions.push(null);
          }
 
+      }
+   };
+
+   async downloadFile(fullUrl, requestOptions, versionLabel){
+      try {
+         let response = null;
+         response = await axios.head(fullUrl, requestOptions);
+         const contentType = response.headers['content-type'];
+         const contentLength = response.headers['content-length'];
+         console.log('contentType:', contentType, 'contentLength:', contentLength);
+         let result = null;
+         let data = null;
+         let responseType = null;
+         if (contentType.match(/\bjson\b/)) {
+            responseType = 'json';
+         }
+         else if (contentLength && contentLength < 100_000_000) {
+            if (
+               /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
+               || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
+            ) {
+               responseType = 'text';
+            } else {
+               responseType = 'arraybuffer';
+            }
+         }
+         if (responseType) {
+            response = await axios.get(fullUrl, {...requestOptions, responseType});
+         }
+         if (response.status != 200) {
+            if (contentType.match(/\bjson\b/)) {
+               data = response.data;
+               if (data.message) {
+                  result = data.details || data.message;
+                  if (data.remediation && data.remediation !== "No remediation message is available.") {
+                     result = `${result.trim()}, remediation: ${data.remediation}`;
+                  }
+               } else {
+                  result = beautify(JSON.stringify(data), {
+                     indent_size: 2,
+                     space_in_empty_paren: true,
+                  });
+               }
+            } else {
+               result = response.data;
+               result = `${response.status}, ${response.statusText}: Result: ${result}`;
+            }
+            throw new Error(`HTTP error! ${result}`);
+         }
+         if (contentLength && contentLength < 100_000_000) {
+            if (
+               /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
+               || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
+            ) {
+               const responseText = response.data;
+               this.fileContents.push(responseText);
+            } else  {
+               // throw new Error(`File with content-length: ${contentLength} NOT downloaded given unexpected content-type: ${contentType}!`)
+               const arrayBuffer = response.data;
+               this.fileContents.push(Buffer.from(arrayBuffer));
+            }
+            this.fileVersions.push(versionLabel || '');
+            this.fileContentLength.push(contentLength);
+            this.fileContentType.push(contentType);
+         } else {
+            throw new Error(`File with content-type: ${contentType} NOT downloaded given unexpected content-length: ${contentLength}!`)
+         }
+      } catch (error) {
+         console.error("Error fetching Remote File Contents:", error);
+         vscode.window.showErrorMessage("Error fetching Remote File Contents:", error.message);
+         this.fileContents.push(error.message);
+         this.fileVersions.push(null);
       }
    };
 
@@ -1880,7 +1960,13 @@ class RestApi {
                   const editable = false;
                   if (this.manifest){
                      try{
-                        await getObjectView(this.manifest, editable, "Job Submission Manifest", "Job Submission Manifest");
+                        await getObjectView(
+                           this.manifest,
+                           editable,
+                           "Job Submission Manifest",
+                           "Job Submission Manifest",
+                           this
+                        );
                      } catch(error) {
                         debugger;
                         if (error === "cancelled") {
