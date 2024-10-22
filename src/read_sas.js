@@ -8,6 +8,7 @@ async function initWebR() {
    await webR.init();
    await webR.installPackages(['haven', 'jsonlite'], {mount: true, quiet: false, repos: "https://repo.r-wasm.org/"});
    await webR.FS.mkdir('/data');
+   return webR;
 }
 
 async function read_sas(sas7bdatFile, rows = 'TRUE', cols = 'TRUE'){
@@ -57,7 +58,7 @@ async function read_xpt(xptFile, rows = 'TRUE', cols = 'TRUE'){
    return JSON.parse(json);
 }
 
-module.exports = { webR, initWebR, read_sas, read_xpt, read_sas_size, read_xpt_size };
+module.exports = { initWebR, read_sas, read_xpt, read_sas_size, read_xpt_size };
 
 /*
 // example
