@@ -68,3 +68,7 @@
 - Use webpack to fix issues with webR bundling
 - Replace node-fetch with axios and fix strange error: fetch is not a function
 - Use commonJS-style exports for consistency
+
+## 1.1.2
+
+- Fix issue with configuration file webdav.json not found in case local file/folder does not exist

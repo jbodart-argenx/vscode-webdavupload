@@ -16,6 +16,8 @@ const { showMultiLineText } = require('./multiLineText.js');
 const { showTableView } = require('./json-table-view.js');
 const { read_sas, read_xpt } = require('./read_sas.js');
 const axios = require('axios');
+const xml2js = require('xml2js');
+const { getObjectView } = require("./object-view.js");
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
 
@@ -24,7 +26,7 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 
 const { getEndpointConfigForCurrentPath } = require('./endpointConfig.js');
 
-const { getCredentials, storeCredentials, authTokens, setAuthTokens } = require('./auth.js')
+const { askForCredentials, getCredentials, storeCredentials, authTokens, setAuthTokens } = require('./auth.js')
 
 
 // REST API functions
@@ -57,15 +59,19 @@ class RestApi {
    async getEndPointConfig(param, onlyRepo = false) {
       if (typeof param === 'string') {
          param = vscode.Uri.file(param);
+      } else if (param == null && vscode.window.activeTextEditor) {
+         param = vscode.window.activeTextEditor?.document?.uri;
       }
       if (param instanceof vscode.Uri) {
-         console.log('(getEndPointConfig) param:', param);
          this.localFile = param.fsPath;
-         this.localFileStat = await vscode.workspace.fs.stat(param);
-      } else if (param == null && vscode.window.activeTextEditor) {
-         this.localFile = vscode.window.activeTextEditor.document.uri.fsPath;
-         this.localFileStat = await vscode.workspace.fs.stat(vscode.window.activeTextEditor.document.uri);
-      }
+         this.localFileStat = null;
+         while(this.localFileStat == null && vscode.Uri.joinPath(param, '..') !== param) {
+            this.localFileStat = await this.getFileStat(param);
+            if (this.localFileStat == null) {
+               param = vscode.Uri.joinPath(param, '..'); // get parent uri
+            }
+         }
+      } 
       else {
          this.localFile = null;
          this.localFileStat = null;
@@ -97,13 +103,13 @@ class RestApi {
             param :
             (typeof param === 'string') ?
             vscode.Uri.file(param) :
-            vscode.window.activeTextEditor.document.uri);
+            vscode.window.activeTextEditor?.document?.uri);
       console.log("workingWSFolder:\n", beautify(JSON.stringify(workingWSFolder)));
 
       const remoteFile = this.localFile
          .replace(/\\/g, "/")
          .replace(
-            path.posix.join(workingWSFolder.uri.fsPath.replace(/\\/g, "/"), config.localRootPath.replace(/\\/g, "/")),
+            path.posix.join(workingWSFolder?.uri.fsPath.replace(/\\/g, "/"), config.localRootPath.replace(/\\/g, "/")),
             ""
          );
       // const remoteFile = this.localFile
@@ -141,7 +147,9 @@ class RestApi {
             maxRedirects: 5 // Optional, axios follows redirects by default
          });
 
-         if (response.status !== 200) {
+         if (response.status === 401) {
+            this.encryptedPassword = { status: response.status, statusText: response.statusText, data: response.data, headers: response.headers };
+         } else if (response.status !== 200) {
             throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
          }
 
@@ -183,17 +191,42 @@ class RestApi {
                }
             } else {
                delete authTokens[this.host];
+               return this.logon();
             }
          } catch (err) {
             console.log(err);
          }
       }
-      if (!this.encryptedPassword) {
+      if (!this.encryptedPassword || typeof this.encryptedPassword !== 'string') {
+         console.log(this.encryptedPassword);
          const creds = await getCredentials(this.host);
          const { _username: username, _password: password } = creds;
-         this.username = username;
-         await this.encryptPassword(password);
-         if (!this.encryptedPassword) {
+         if (typeof username === 'string' 
+            && typeof password === 'string'
+            && username.trim().length > 1
+            && password.trim().length > 6
+         ) {
+            this.username = username;
+            await this.encryptPassword(password);
+         } else {
+            const creds = await askForCredentials(this.host);
+            const { _username: username, _password: password } = creds;
+            if (typeof username === 'string' 
+               && typeof password === 'string'
+               && username.trim().length > 1
+               && password.trim().length > 6
+            ) {
+               this.username = username;
+               await this.encryptPassword(password);
+            } else {
+               this.encryptedPassword = null;
+               return this.logon();
+            }
+         }
+         if (typeof this.encryptedPassword === 'object') {
+            throw new Error('No encrypted password, aborting logon.');
+         }
+         if (typeof this.encryptedPassword !== 'string') {
             throw new Error('No encrypted password, aborting logon.');
          }
       }
@@ -243,6 +276,29 @@ class RestApi {
             throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
          }
       } catch (error) {
+         if (error?.response?.status === 401) {
+            if (`${error.response?.data?.message}`.match(/credentials.*incorrect/i)) {
+               try {
+                  this.encryptedPassword = null;
+                  const credentials = await askForCredentials(this.host);
+                  if (typeof credentials._username === 'string' 
+                     && typeof credentials._password === 'string'
+                     && credentials._username.trim().length > 1
+                     && credentials._password.trim().length > 6
+                  ) {
+                     this.username = credentials._username;
+                     await this.encryptPassword(credentials._password);
+                     if (typeof this.encryptedPassword === 'string') {
+                        return this.logon();
+                     }
+                  } else {
+                     return this.logon();
+                  }
+               } catch (error) {
+                  console.log(error);
+               }
+            }
+         }
          console.error('Error fetching x-auth-token:', error)
       }
    }
@@ -266,65 +322,72 @@ class RestApi {
       console.log('urlPath:', urlPath)
       const filePath = this.remoteFile;
       let response, contentType, contentLength, transferEncoding, result, data;
-      
-         const apiRequest = `${urlPath}${filePath}?component=contents`;
-         const requestOptions = {
-            headers: { "X-Auth-Token": this.authToken },
-            maxRedirects: 5 // Optional, axios follows redirects by default
-         };
-         try {
-            const fullUrl = encodeURI(apiUrl + apiRequest)
+      const apiRequest = `${urlPath}${filePath}?component=contents`;
+      const requestOptions = {
+         headers: { "X-Auth-Token": this.authToken },
+         maxRedirects: 5, // Optional, axios follows redirects by default
+         responseType: 'arraybuffer'
+      };
+      try {
+         const fullUrl = encodeURI(apiUrl + apiRequest)
+         response = await axios.get(fullUrl, requestOptions);
+         contentType = response.headers['content-type'];
+         contentLength = response.headers['content-length'];
+         transferEncoding = response.headers['transfer-encoding'];
+         console.log('contentType:', contentType, 'contentLength:', contentLength, 'transferEncoding:', transferEncoding);
+         if (`${transferEncoding}`.toLowerCase() === 'chunked') {
+            requestOptions.responseType = 'stream';
             response = await axios.get(fullUrl, requestOptions);
             contentType = response.headers['content-type'];
             contentLength = response.headers['content-length'];
-            transferEncoding = response.headers['transfer-encoding'];
-            console.log('contentType:', contentType, 'contentLength:', contentLength, 'transferEncoding:', transferEncoding);
-            if (response.status != 200) {
-               if (contentType.match(/\bjson\b/)) {
-                  data = response.data;
-                  if (data.message) {
-                     result = data.details || data.message;
-                     if (data.remediation && data.remediation !== "No remediation message is available.") {
-                        result = `${result.trim()}, remediation: ${data.remediation}`;
-                     }
-                  } else {
-                     result = beautify(JSON.stringify(data), {
-                        indent_size: 2,
-                        space_in_empty_paren: true,
-                     });
+         }
+         transferEncoding = response.headers['transfer-encoding'];
+         if (response.status != 200) {
+            if (contentType.match(/\bjson\b/)) {
+               data = response.data;
+               if (data.message) {
+                  result = data.details || data.message;
+                  if (data.remediation && data.remediation !== "No remediation message is available.") {
+                     result = `${result.trim()}, remediation: ${data.remediation}`;
                   }
                } else {
-                  result = response.data;
-                  result = `${response.status}, ${response.statusText}: Result: ${result}`;
-               }
-               throw new Error(`HTTP error! ${result}`);
-            }
-            if (transferEncoding?.toLowerCase() === 'chunked' || contentLength < 500_000_000) {
-               // const arrayBuffer = await response.arrayBuffer();
-               try {
-                  const tempFile = tmp.fileSync({ postfix: '.zip', discardDescriptor: true });
-                  // await fs.promises.writeFile(tempFile.name, Buffer.from(arrayBuffer));
-                  // Create a writable stream to save the file
-                  const fileStream = fs.createWriteStream(tempFile.name);
-                  if (pipeline){
-                     await pipeline(response.data, fileStream); // Automatically handles errors (Node.js v15+)
-                  } else {
-                     // Pipe the response stream directly to the file
-                     response.data.pipe(fileStream);
-                     // Await the 'finish' and 'error' events using a helper function
-                     await streamToPromise(fileStream);
-                  }
-                  return tempFile.name;
-               } catch (error) {
-                  throw new Error(`Error downloading to Temporary Zip file! ${error.message}`);
+                  result = beautify(JSON.stringify(data), {
+                     indent_size: 2,
+                     space_in_empty_paren: true,
+                  });
                }
             } else {
-               throw new Error(`File with content-type: ${contentType} NOT downloaded given unexpected content-length: ${contentLength}!`)
+               result = response.data;
+               result = `${response.status}, ${response.statusText}: Result: ${result}`;
             }
-         } catch (error) {
-            console.error("Error fetching Remote Folder Contents as Zip:", error);
-            vscode.window.showErrorMessage("Error fetching Remote Folder Contents as Zip:", error.message);
+            throw new Error(`HTTP error! ${result}`);
          }
+         if (transferEncoding?.toLowerCase() === 'chunked' || contentLength < 500_000_000) {
+            // const arrayBuffer = await response.arrayBuffer();
+            try {
+               const tempFile = tmp.fileSync({ postfix: '.zip', discardDescriptor: true });
+               // await fs.promises.writeFile(tempFile.name, Buffer.from(arrayBuffer));
+               // Create a writable stream to save the file
+               const fileStream = fs.createWriteStream(tempFile.name);
+               if (pipeline){
+                  await pipeline(response.data, fileStream); // Automatically handles errors (Node.js v15+)
+               } else {
+                  // Pipe the response stream directly to the file
+                  response.data.pipe(fileStream);
+                  // Await the 'finish' and 'error' events using a helper function
+                  await streamToPromise(fileStream);
+               }
+               return tempFile.name;
+            } catch (error) {
+               throw new Error(`Error downloading to Temporary Zip file! ${error.message}`);
+            }
+         } else {
+            throw new Error(`File with content-type: ${contentType} NOT downloaded given unexpected content-length: ${contentLength}!`)
+         }
+      } catch (error) {
+         console.error("Error fetching Remote Folder Contents as Zip:", error);
+         vscode.window.showErrorMessage("Error fetching Remote Folder Contents as Zip:", error.message);
+      }
 
    };
 
@@ -478,7 +541,7 @@ class RestApi {
          try {
             fileStat = await vscode.workspace.fs.stat(param);           
          } catch (error) {
-            fileStat = {error};
+            fileStat = null;
          }
       } 
       return fileStat;
@@ -491,7 +554,7 @@ class RestApi {
       if (param instanceof vscode.Uri) {
          this.localFile = param.fsPath;
       } else {
-         this.localFile = vscode.window.activeTextEditor.document.uri.fsPath;
+         this.localFile = vscode.window.activeTextEditor?.document?.uri.fsPath;
       }
       if (!this.localFile) {
          console.error('Cannot get Remote File Properties of a non-specified file:', this.localFile);
@@ -526,7 +589,7 @@ class RestApi {
       const requestOptions = {
          headers: { "X-Auth-Token": this.authToken },
          maxRedirects: 5 // Optional, axios follows redirects by default
-     };
+      };
       try {
          // const response = await fetch(apiUrl + apiRequest, requestOptions);
          const fullUrl = encodeURI(apiUrl + apiRequest)
@@ -655,7 +718,7 @@ class RestApi {
       if (param instanceof vscode.Uri) {
          this.localFile = param.fsPath;
       } else {
-         this.localFile = vscode.window.activeTextEditor.document.uri.fsPath;
+         this.localFile = vscode.window.activeTextEditor?.document?.uri.fsPath;
       }
       if (!this.localFile) {
          console.error('Cannot get Remote Folder Contents of a non-specified path:', this.localFile);
@@ -757,7 +820,7 @@ class RestApi {
       }
       await this.logon();
       const apiUrl = `https://${this.host}/lsaf/api`;
-      const urlPath = new URL(this.config.remoteEndpoint.url).pathname
+      const urlPath = new URL(this.config?.remoteEndpoint?.url).pathname
          .replace(/\/lsaf\/webdav\/work\//, '/workspace/files/')
          .replace(/\/lsaf\/webdav\/repo\//, '/repository/files/')
          .replace(/\/$/, '')
@@ -767,18 +830,65 @@ class RestApi {
       const apiRequest = `${urlPath}${filePath}?component=versions`;
       const requestOptions = {
          headers: { "X-Auth-Token": this.authToken },
-        maxRedirects: 5 // Optional, axios follows redirects by default
+         maxRedirects: 5 // Optional, axios follows redirects by default
       };
       try {
          // const response = await fetch(apiUrl + apiRequest, requestOptions);
          const fullUrl = encodeURI(apiUrl + apiRequest)
-         const response = await axios.get(fullUrl, requestOptions);
-         const contentType = response.headers['content-type'];
+         console.log('fullUrl:', fullUrl);
+         let response;
+         try {
+            response = await axios.head(fullUrl, requestOptions);
+         } catch(error) {
+            console.log(error);
+            if (error.status === 404) {
+               console.warn('File not found:', filePath);
+               vscode.window.showErrorMessage(`File not found: ${filePath}`);
+               return error;
+            }
+         }
+         let contentType = response.headers['content-type'];
          console.log('contentType:', contentType);
+         let transferEncoding = response.headers['transfer-encoding'];
+         console.log('transferEncoding:', transferEncoding);
          let result = null;
          let data = null;
+         try {
+            if (transferEncoding === 'chunked') {
+               requestOptions.responseType = 'stream';
+               response = await axios.get(fullUrl, requestOptions);
+               data = await new Promise((resolve, reject) => {
+                  let chunks = '';
+                  response.data.on('data', (chunk) => {
+                     chunks += chunk;
+                  });
+      
+                  response.data.on('end', () => {
+                     resolve(chunks);
+                  });
+      
+                  response.data.on('error', (error) => {
+                     reject(error);
+                  });
+               });
+               contentType = response.headers['content-type'];
+               console.log('contentType:', contentType);
+               if (contentType.match(/\bjson\b/)) {
+                  const jsonData = JSON.parse(data);
+                  if (jsonData && typeof jsonData === 'object') {
+                     data = jsonData;
+                  }
+               }
+            } else {
+               response = await axios.get(fullUrl, requestOptions);
+               data = response.data;
+            }
+         } catch (error) {
+            console.log(error);
+         }
+         contentType = response.headers['content-type'];
+         console.log('contentType:', contentType);
          if (contentType.match(/\bjson\b/)) {
-            data = response.data;
             if (data.message) {
                result = data.details || data.message;
                if (data.remediation && data.remediation !== "No remediation message is available.") {
@@ -886,6 +996,117 @@ class RestApi {
          vscode.window.showErrorMessage(`Error: ${err.message}`)
       }
    }
+
+   async parseXmlString(xmlString) {
+      const parser = new xml2js.Parser();
+      // Use Promise to handle async parsing
+      return new Promise((resolve, reject) => {
+         parser.parseString(xmlString, (err, result) => {
+            if (err) {
+                  return reject(err);  // Reject promise in case of error
+            }
+            resolve(result);  // Resolve promise with parsed result
+         });
+      });
+   }
+
+   async getRemoteJobParameters(jobFile, submitThisJob = false) {
+      try {
+         await this.getRemoteFileContents(jobFile);
+      } catch (error) {
+         console.log(error);
+      }
+      if (! Array.isArray(this.fileContents)) {
+         this.fileContents = [this.fileContents];
+      }
+      if (!this.fileContents || this.fileContents?.length === 0) {
+         await this.getRemoteFileContents()
+         if (!this.fileContents) {
+            throw new Error("Failed to get remote file contents.");
+         }
+      }
+      try {
+         this.jobContents = await this.parseXmlString(this.fileContents); 
+         if (this.fileVersions && Array.isArray(this.fileVersions)){
+            this.jobVersion = this.fileVersions[0] || '';
+         } else {
+            this.jobVersion = this.fileVersions || '';
+         }
+         console.log(this.jobContents);
+         // getObjectView(this.jobContents, false);
+         let jobParams = [];
+         if (this.jobContents?.job?.parameters[0]?.parameter
+            && Array.isArray(this.jobContents?.job?.parameters[0]?.parameter)
+         ) {
+            jobParams = [...jobParams, ...this.jobContents.job.parameters[0].parameter
+               .map(p => ({ defaultValue:p._, ...p.$}))
+               .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
+         }
+         if (this.jobContents?.job?.parameters[0]['character-parameter']
+            && Array.isArray(this.jobContents?.job?.parameters[0]['character-parameter'])) {
+               jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['character-parameter']
+               .map(p => ({ defaultValue:p._, ...p.$}))
+               .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
+         }
+         if (this.jobContents?.job?.parameters[0]['numeric-parameter']
+            && Array.isArray(this.jobContents?.job?.parameters[0]['numeric-parameter'])) {
+               jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['numeric-parameter']
+               .map(p => ({ defaultValue:p._, ...p.$}))
+               .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
+         }
+         if (this.jobContents?.job?.parameters[0]['folder-parameter']
+            && Array.isArray(this.jobContents?.job?.parameters[0]['folder-parameter'])) {
+               jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['folder-parameter']
+               .map(p => ({ defaultValue:p._, ...p.$}))
+               .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
+         }
+         if (this.jobContents?.job?.parameters[0]['file-parameter']
+            && Array.isArray(this.jobContents?.job?.parameters[0]['file-parameter'])) {
+               jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['file-parameter']
+               .map(p => ({ defaultValue:p._, ...p.$}))
+               .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
+         }
+         if (this.jobContents?.job?.parameters[0]['masked-parameter']
+            && Array.isArray(this.jobContents?.job?.parameters[0]['masked-parameter'])) {
+               jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['masked-parameter']
+               .map(p => ({ defaultValue:p._, ...p.$}))
+               .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
+         }
+         if (this.jobContents?.job?.parameters[0]['date-parameter']
+            && Array.isArray(this.jobContents?.job?.parameters[0]['date-parameter'])) {
+               jobParams = [...jobParams, ...this.jobContents.job.parameters[0]['date-parameter']
+               .map(p => ({ defaultValue:p._, ...p.$}))
+               .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
+         }
+         // const editableParams = jobParams.map(p => ({[`[${p.name}] ${p.label}:`]: p.value, includeSubFolders: p.includeSubFolders}));
+         const editableParams = jobParams.map(p => ({[`[${p.name}] ${p.label}:`]: p.value}));
+         console.log('(getRemoteJobParameters) jobParams:\n', jobParams);
+         console.log('(getRemoteJobParameters) editableParams:\n', editableParams);
+         let newParams = undefined;
+         if (jobParams) {
+            const editable = true;
+            newParams = await getObjectView(editableParams, editable, "Enter Job Parameters", "Job Parameters");
+            newParams = Object.entries(newParams).map(([a, b]) => b)
+               .map(item => Object.entries(item).reduce((acc, [k,v]) => {acc[k.split(/[\[\]]/)[1]]= v; return acc}, {}))
+               .reduce((acc, obj)=> ({...acc, ...obj}), {});
+         }
+         console.log('(getRemoteJobParameters) newParams:\n', newParams);
+         if (submitThisJob) {
+            await this.submitJob(this.remoteFile, this.jobVersion, newParams);
+         }
+         return newParams;
+      } catch (error) {
+         if (error === "Cancelled" || error?.message === "Cancelled") {
+            console.log('(getRemoteJobParameters) Cancelling.');
+            vscode.window.showErrorMessage('(getRemoteJobParameters) Cancelling.');
+         } else {
+            console.log('(getRemoteJobParameters) error:', error);
+            debugger;
+            vscode.window.showErrorMessage('(getRemoteJobParameters) error:', error);
+         }
+      }
+   }
+
 
    // viewFileContents
    async viewFileContents(){
@@ -1180,7 +1401,7 @@ class RestApi {
       const remoteFile = this.localFile
          .replace(/\\/g, "/")
          .replace(
-            path.posix.join(workingWSFolder.uri.fsPath.replace(/\\/g, "/"), this.config.localRootPath.replace(/\\/g, "/")),
+            path.posix.join(workingWSFolder?.uri.fsPath.replace(/\\/g, "/"), this.config.localRootPath.replace(/\\/g, "/")),
             ""
          );
 
@@ -1390,7 +1611,7 @@ class RestApi {
          headers: {
             ...formdata.getHeaders(),
             "X-Auth-Token": this.authToken
-        },
+         },
         maxRedirects: 0 // Handle redirection manually
       };
       // console.log(JSON.stringify(requestOptions));
@@ -1430,7 +1651,7 @@ class RestApi {
                   headers: {
                      ...formdata.getHeaders(),
                      "X-Auth-Token": this.authToken
-                 },
+                  },
                  maxRedirects: 0 // Handle redirection manually
                };
                // Perform the PUT request again at the new location
@@ -1485,7 +1706,387 @@ class RestApi {
       }
    };
 
-}
+   
+   async submitJob(argJob, argVersion, argParams) {
+      console.log('job:', argJob, 'version:', argVersion, '\nparams:\n', argParams);
+      if (argJob instanceof vscode.Uri) {
+         argJob = argJob.fsPath;
+      }
+      if (typeof argJob !== 'string') {
+         console.warn(`(submitJob) invalid argJob type: ${typeof argJob} ${argJob}`);
+         throw new Error(`(submitJob) invalid argJob type: ${typeof argJob} ${argJob}`);
+      }
+      await this.logon();
+      const apiUrl = `https://${this.host}/lsaf/api`;
+      const submitHost = new URL(this.config.remoteEndpoint.url).hostname.split('.')[0];
+      const urlPath = new URL(this.config.remoteEndpoint.url).pathname
+         .replace(/\/lsaf\/webdav\/work\//, '/jobs/workspace/')
+         .replace(/\/lsaf\/webdav\/repo\//, '/jobs/repository/')
+         .replace(/\/$/, '')
+      const jobType = /\/repository\//.test(urlPath) ? "repo" : /\/workspace\//.test(urlPath) ? "work" : undefined;
+      const jobPathPrefix = urlPath.replace(/^\/jobs\/(workspace|repository)/, '');
+      console.log('submitHost:', submitHost, 'jobType:', jobType, 'urlPath:', urlPath, 'jobPathPrefix:', jobPathPrefix);
+      const jobPath = this.remoteFile;
+      const jobName = path.basename(jobPath);
+      const fullJobPath = jobPathPrefix + jobPath;
+      console.log('fullJobPath:', fullJobPath);
+      let apiRequest = `${urlPath}${encodeURI(jobPath)}?action=run`;
+      if (/\d+\.\d+/.test(`${argVersion}`.trim())) {
+         apiRequest = `${apiRequest}&version=${argVersion.toString().trim()}`;
+      }
+      apiRequest = `${apiRequest}&expand=status`;
+      const fullUrl = apiUrl + apiRequest
+      console.log('fullUrl:', fullUrl);
+      let requestOptions;
+      requestOptions = {
+         method: 'put',
+         maxBodyLength: Infinity,
+         url: fullUrl,
+         headers: {
+            "X-Auth-Token": this.authToken,
+            'Content-Type': 'application/json'
+         },
+         maxRedirects: 5 
+      };
+      if (typeof argParams === 'object') {
+         requestOptions.data = JSON.stringify(argParams);
+      } else if (typeof argParams === 'string') {
+         requestOptions.data = argParams;
+      }
+      let response;
+      let result;
+      let status;
+      let message;
+      let submissionId;
+      let data;
+      let prev_message = '';
+      let submitStarted = new Date();
+      const intervalId = setInterval(async () => {
+         if (requestOptions.url) {
+            try {
+               const controller = new AbortController();
+               const timeout = 10_000;
+               const timeoutId = setTimeout(() => controller.abort(), timeout);
+               try {
+                  response = await axios.request({ ...requestOptions, signal: controller.signal });
+                  clearTimeout(timeoutId); // clear timeout when the request completes
+                  requestOptions.url = null; // prevent re-launching same job continuously
+               } catch (error) {
+                  clearInterval(intervalId);
+                  debugger;
+                  if (error.code === 'ECONNABORTED') {
+                     console.error(`(submitJob) Http request timed out after ${timeout/1000} seconds.`);
+                     throw new Error(`(submitJob) Http request timed out after ${timeout/1000} seconds.`);
+                  } else {
+                     console.error('(submitJob) Http request failed:', error);
+                     debugger;
+                     throw new Error('(submitJob) Http request failed:', error.message);
+                  }
+               }
+               console.log('response.status:', response.status, response.statusText);
+               
+               if (!response.status === 200) {
+                  const responseText = response.data;
+                  console.log("responseText:", responseText);
+                  vscode.window.showErrorMessage(`HTTP error submitting ${jobType} job! Status: ${response.status}  ${response.statusText}`);
+                  throw new Error(`HTTP error submitting ${jobType} job! Status: ${response.status}  ${response.statusText}`);
+               }
+               const contentType = response.headers['content-type'];
+               console.log('contentType:', contentType);
+               if (response.headers['content-type'].match(/\bjson\b/)) {
+                  data = response.data;
+                  status = data.status || (data.state ? { type: `${data.state}`.toUpperCase(), message: data.message } : undefined) ;
+                  console.log('status:', status);
+                  submissionId = data.submissionId || data.id || submissionId;
+                  // change URL toget submission status
+                  if (submissionId) {
+                     requestOptions.url = apiUrl + `/jobs/submissions/${submissionId}`;
+                     requestOptions.method = 'get';
+                  } 
+                  if (! submissionId || ! status || !data ) {
+                     debugger;
+                  }
+                  result = beautify(JSON.stringify(data), {
+                     indent_size: 2,
+                     space_in_empty_paren: true,
+                  });
+               } else {
+                  result = response.data;
+               }
+               if (status?.type === 'FAILURE') {
+                  message = `${jobType} job "${jobName}" submission **failed**:\n\n` + (status?.message || result) + `\n\nat ${fullJobPath}`;
+                  clearInterval(intervalId);
+               } else if (status?.type === 'CANCELED') {
+                  message = `${jobType} job "${jobName}" submission **canceled**:\n\n` + (status?.message || result) + `\n\nat ${fullJobPath}`;
+                  clearInterval(intervalId);
+               } else if (status?.type === 'COMPLETED') {
+                  const submitCompleted = new Date();
+                  const diffInMs = submitCompleted - submitStarted ;
+                  const diffInSeconds = Math.floor(diffInMs / 1000);
+                  const diffInMinutes = Math.floor(diffInSeconds / 60);
+                  const diffInHours = Math.floor(diffInMinutes / 60);
+                  const diffInDays = Math.floor(diffInHours / 24);
+
+                  const hours = diffInHours % 24;
+                  const minutes = diffInMinutes % 60;
+                  const seconds = diffInSeconds % 60;
+                  let duration;
+                  if (diffInDays) {
+                     duration = `${diffInDays} days, ${hours} hours`;
+                  } else if (hours) {
+                     duration = `${hours} hours, ${minutes} minutes`;
+                  } else if (minutes) {
+                     duration = `${minutes} minutes, ${seconds} seconds`;
+                  } else if (seconds) {
+                     duration = `${seconds} seconds`;
+                  } else {
+                     duration = `${diffInMs} milliseconds`;
+                  }
+                  console.log(`Completed after: ${duration}`);
+                  message = `${jobType} job "${jobName}" *completed* in ${duration}:\n\n` + (status?.message || result) + `\n\nat ${fullJobPath}`;
+                  clearInterval(intervalId);
+               } else {
+                  if (status?.type === 'STARTED') {
+                     message = `${jobType} job "${jobName}" started:` + (status?.message || result) + `\n\nat ${fullJobPath}`;
+                  } else if (status?.type === 'RUNNING') {
+                     message = `${jobType} job "${jobName}" running: ` + (status?.message || result) + `\n\nat ${fullJobPath}`;
+                  } else if (status?.type === 'PUBLISHING') {
+                     message = `${jobType} job "${jobName}" publishing: ` + (status?.message || result) + `\n\nat ${fullJobPath}`;
+                  } else {
+                     message = `${jobType} job "${jobName}" Status type: ${status?.type} ` + (status?.message || result) + `\n\nat ${fullJobPath}`;
+                     debugger;
+                     console.log(message);
+                  }
+               } 
+               console.log('submissionId:', submissionId);
+               console.log('  result:', result);
+               console.log('  '+message);
+               if (message !== prev_message) {
+                  if (/with program errors/i.test(message)) {
+                     vscode.window.showErrorMessage(message);
+                  } else if (/with program warnings/i.test(message)) {
+                     vscode.window.showWarningMessage(message);
+                  } else {
+                     vscode.window.showInformationMessage(message);
+                  }
+               }
+               prev_message = message;
+               if (status?.type === 'COMPLETED') {
+                  const location = `${jobType || 'repository'}`
+                     .replace(/^repo$/, 'repository')
+                     .replace(/^work$/, 'workspace')
+                     ;
+                  this.manifest = await this.getJobSubmissionManifest(submissionId, location);
+                  const editable = false;
+                  if (this.manifest){
+                     try{
+                        await getObjectView(this.manifest, editable, "Job Submission Manifest", "Job Submission Manifest");
+                     } catch(error) {
+                        debugger;
+                        if (error === "cancelled") {
+                           console.log('(submitJob) Cancelled.');
+                        } else {
+                           console.log('(submitJob) Error in getObjectView():', error);
+                        }
+                     }
+                  }
+                  console.log('this.manifest:', beautify(JSON.stringify(this.manifest)));
+                  console.log('done');
+               }
+            } catch (error) {
+               vscode.window.showErrorMessage(`Error submitting ${jobType} job ${jobName} at "${fullJobPath || argJob}":`, error);
+               debugger;
+               console.error(`Error submitting ${jobType} job ${jobName} at "${fullJobPath || argJob}":`, error);
+            }
+         }
+      }, 3000)
+   };
+
+   removeNulls(obj) {
+      for (const key in obj) {
+         if (obj[key] == null || key === 'null') {
+            console.log('--> deleting Object key:', key, 'with value:', obj[key]);
+            delete obj[key]; // Remove the property if it's null
+         } else if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+            // If it's a nested object, recursively remove nulls from it
+            this.removeNulls(obj[key]);
+
+            // After recursion, check if the nested object is now empty, and delete if so
+            if (Object.keys(obj[key]).length === 0) {
+                  delete obj[key];
+            }
+         }
+      }
+      return obj;
+   }
+
+   async getJobSubmissionManifest(submissionId, location = 'repository') {
+      await this.logon();
+      const getUrl = async o => ({path: o["repository-file"][0]._, ...o["repository-file"][0].$, ...(await this.getUrlFromManifestItem(o))});
+      const apiUrl = `https://${this.host}/lsaf/api`;
+      let requestOptions, response, manifestPath, manifestContent, manifestInputs, manifestOutputs,
+         manifestPrograms, manifestLog, manifestLst, manifestParameters, manifestMetrics,
+         manifestInputExternalRefs, manifestOutputExternalRefs, submission, data;
+      requestOptions = {
+         method: 'get',
+         url: apiUrl + `/jobs/submissions/${submissionId}/manifest`,
+         headers: {
+            "X-Auth-Token": this.authToken
+         },
+         maxRedirects: 5 
+      };
+      try {
+         response = await axios.request(requestOptions);
+      } catch (error) {
+         console.error('(getJobSubmissionManifest) Http request failed:', error);
+         debugger;
+         throw new Error('(getJobSubmissionManifest) Http request failed:', error.message);
+      }
+      console.log('response.status:', response.status, response.statusText);
+      if (!response.status === 200) {
+         const responseText = response.data;
+         console.log("responseText:", responseText);
+         vscode.window.showErrorMessage(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+         throw new Error(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+      }
+      const contentType = response.headers['content-type'];
+      console.log('contentType:', contentType);
+      if (response.headers['content-type'].match(/\bjson\b/)) {
+         manifestPath = response.data.path;
+         location = location || response.data.schematype;
+         console.log('response.data:', response.data);
+         console.log('location:', location, 'manifestPath:', manifestPath);
+         requestOptions.url = apiUrl + `/${location}/files${manifestPath}?component=contents`;
+         console.log('requestOptions.url:', requestOptions.url);
+         try {
+            response = await axios.request(requestOptions);
+            console.log('response.status:', response.status, response.statusText);
+            if (!response.status === 200) {
+               const responseText = response.data;
+               console.log("responseText:", responseText);
+               vscode.window.showErrorMessage(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+               throw new Error(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+            }
+            const contentType = response.headers['content-type'];
+            console.log('contentType:', contentType);
+            if (contentType === 'application/octet-stream;charset=UTF-8'
+               && /^<\?xml /.test(response.data)
+            ) {
+               manifestContent = await this.parseXmlString(response.data); 
+               console.log('manifestContent:', manifestContent);
+               manifestOutputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].outputs[0].output.map(getUrl))).map(o => o.value);
+               console.log('manifestOutputs:', manifestOutputs);
+               manifestLog = (await Promise.allSettled(manifestContent["job-manifest"].job[0].logs[0].log.map(getUrl))).map(o => o.value)[0];
+               console.log('manifestLog:', manifestLog);
+               manifestLst = (await Promise.allSettled(manifestContent["job-manifest"].job[0].results[0].result.map(getUrl))).map(o => o.value)[0];
+               console.log('manifestLst:', manifestLst);
+               manifestInputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].inputs[0].input.map(getUrl)))
+                  .map(o => o.value)
+                  .filter(o => o != null)
+                  ;
+               manifestInputExternalRefs = manifestContent["job-manifest"].job[0].inputs[0]["external-ref"].map(p => p.$);
+               manifestOutputExternalRefs = manifestContent["job-manifest"].job[0].outputs[0]["external-ref"].map(p => p.$);
+               console.log('manifestInputs:', manifestInputs);
+               manifestPrograms = (await Promise.allSettled(manifestContent["job-manifest"].job[0].programs[0].program.map(getUrl))).map(o => o.value);
+               console.log('manifestPrograms:', manifestPrograms);
+               manifestParameters = {};
+               for (const key in manifestContent["job-manifest"].job[0].parameters[0]) {
+                  manifestParameters = { 
+                  ...manifestParameters,
+                  [key]: manifestContent["job-manifest"].job[0].parameters[0][key].map(p => ({...p.$, value: p._ || ''}))}
+               }
+               manifestMetrics = {
+                  transferMetrics: manifestContent["job-manifest"].metrics[0].transferMetrics[0].transferMetric.map(p => p.$)
+               };
+               submission = {
+                  ...manifestContent["job-manifest"]["job-submission"][0].$,
+                  ...manifestContent["job-manifest"]["job-submission"].reduce((acc, p) => {
+                        Object.keys(p).forEach(k => {
+                           if (k !== '$') {
+                           acc = { ...acc, [k]: p[k][0]}
+                           }
+                        })
+                        return acc;
+                     }, {})
+                  };
+               delete submission.$;
+               data = {
+                  jobPath: manifestContent["job-manifest"].job[0]['repository-file'][0]._,
+                  ...manifestContent["job-manifest"].job[0]['repository-file'][0].$,
+                  "job-manifest-version": manifestContent["job-manifest"].$.version,
+                  type: manifestContent["job-manifest"].type[0],
+                  ...(['owner', 'run-as-owner', 'description'].reduce((acc, key) => {
+                     acc = {...acc, [key]: manifestContent["job-manifest"].job[0][key][0]}
+                     return acc;
+                  }, {})),
+                  ...manifestContent["job-manifest"].$,
+                  submission,
+                  metrics: manifestMetrics,
+                  programs: manifestPrograms,
+                  parameters: manifestParameters,
+                  log: manifestLog,
+                  lst: manifestLst,
+                  outputs: manifestOutputs,
+                  outputExternalRefs: manifestOutputExternalRefs,
+                  inputs: manifestInputs,
+                  inputExternalRefs: manifestInputExternalRefs
+               };
+               showMultiLineText(beautify(JSON.stringify(data)), "Manifest Content", manifestPath);
+               data = this.removeNulls(data);
+            }
+            console.log('response.status:', response.status, response.statusText);
+         } catch (error) {
+            console.error('Http request failed retrieving manifest contents:', error);
+            debugger;
+            throw new Error('Http request failed retrieving manifest contents:', error.message);
+         }
+         console.log('response.status:', response.status, response.statusText);
+         if (!response.status === 200) {
+            const responseText = response.data;
+            console.log("responseText:", responseText);
+            vscode.window.showErrorMessage(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+            throw new Error(`HTTP error retrieving job submission manifest! submissionId: ${submissionId}, Status: ${response.status}  ${response.statusText}`);
+         }
+         const contentType = response.headers['content-type'];
+         console.log('contentType:', contentType);
+         // debugger;
+         // console.log('response.data:', response.data);
+      }
+      return data;
+   }
+
+   async getUrlFromManifestItem(o, retry=2) {
+      const headUrl = `https://xartest.ondemand.sas.com/lsaf/rest/repository/items${o["repository-file"][0]._}?` +
+                  `&id=${o["repository-file"][0].$.id}` +
+                  `&` +
+                  `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
+                  ;
+      
+      const contentsUrl =  `https://xartest.ondemand.sas.com/lsaf/rest/repository/items/contents${o["repository-file"][0]._}?` +
+                           `&id=${o["repository-file"][0].$.id}` +
+                           `&` +
+                           `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
+                           ;
+      let exists = false;
+      try {
+         const headResponse = await axios.head(headUrl, { headers: { "X-Auth-Token": this.authToken }, maxRedirects: 5 });
+         if (headResponse.status === 200) {
+            exists = true;
+         }
+      } catch(error) {
+         if (error.code === "ECONNRESET" && retry > 0) {
+            retry = retry -1;
+            this.logon();
+            return this.getUrlFromManifestItem(o, retry);
+         } else {
+            debugger;
+            console.log(error);
+         }
+      }
+      return {contentsUrl, exists};
+   }
+
+} // End of Class RestApi definition
 
 
 module.exports = { RestApi };

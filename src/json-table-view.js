@@ -41,14 +41,18 @@ async function showTableView(tableViewTitle, data) {
 
 function getJsonTableWebviewContent(filePath, jsonData) {
    // Extract column names from the first item in the JSON array
-   const columns = Object.keys(jsonData[0]);
+   // const columns = Object.keys(jsonData[0]);
+   let columns;
+   // Check every row for column names that do not exist in other rows
+   columns = [...jsonData].reduce((acc, row) => [...(new Set([...acc, ...Object.keys(row)]))], []);
+   console.log('columns:', columns);
 
    // Generate table headers
    const tableHeaders = columns.map(column => `<th>${column}</th>`).join('');
 
-   // Generate table rows with index
+   // Generate table rows with index - set values of cells that do not exist in a row to '' (instead of the default 'undefined')
    const tableRows = jsonData.map((item, index) => {
-      const row = columns.map(column => `<td>${item[column]}</td>`).join('');
+      const row = columns.map(column => `<td>${item[column] || ''}</td>`).join('');
       return `<tr><th>${index + 1}</th>${row}</tr>`;
    }).join('');
 

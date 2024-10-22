@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const beautify = require("js-beautify");
 const { createZip, extractZip } = require("./zip.js");
+const { getObjectView } = require("./object-view.js");
 
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
@@ -341,12 +342,34 @@ async function restApiProperties(param) {
       console.log("File properties:\n", properties);
       // vscode.window.showInformationMessage(properties);
       showMultiLineText(properties, "Remote File Properties", `${restApi.config.label} file properties: ${restApi.remoteFile}`);
+      getObjectView(JSON.parse(properties), false, `${restApi.config.label} file properties: ${restApi.remoteFile}`, "Remote File Properties");
    } catch (err) {
       console.log(err);
    }
 }
 console.log('typeof restApiProperties:', typeof restApiProperties);
 
+
+
+// restApiSubmitJob
+async function restApiSubmitJob(param) {
+   const restApi = new RestApi();
+   try {
+      const onlyRepo = false;
+      await restApi.getEndPointConfig(param, onlyRepo);   // based on the passed Uri (if defined)
+      // otherwise based on the path of the local file open in the active editor
+      // also sets remoteFile
+      if (!restApi.config) {
+         return;
+      }
+      const submitThisJob = true;
+      let jobData = await restApi.getRemoteJobParameters(param, submitThisJob);
+      console.log(jobData);
+   } catch (err) {
+      console.log(err);
+   }
+}
+console.log('typeof restApiSubmitJob:', typeof restApiSubmitJob);
 
 
 
@@ -372,6 +395,7 @@ async function restApiVersions(param) {
       console.log("File versions:\n", versions);
       // vscode.window.showInformationMessage(versions);
       showMultiLineText(versions, "Remote File Versions", `${restApi.config.label} file versions: ${restApi.remoteFile}`);
+      getObjectView(JSON.parse(versions), false, `${restApi.config.label} file versions: ${restApi.remoteFile}`, "Remote File Versions");
    } catch (err) {
       console.log(err);
    }
@@ -390,5 +414,6 @@ module.exports = {
    restApiDownload,
    restApiDownloadFolderAsZip,
    restApiCompare,
-   restApiUpload
+   restApiUpload,
+   restApiSubmitJob
 };
