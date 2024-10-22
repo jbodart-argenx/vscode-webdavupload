@@ -1,9 +1,10 @@
 const { initWebR, read_sas, read_xpt, read_sas_size, read_xpt_size } = require('../src/read_sas');
 const path = require('path');
 
-
+let webR;
 
 initWebR()
+   .then(myWebR => webR = myWebR)
    .then(async () => read_sas_size(path.join(__dirname, "dm.sas7bdat")))
    .then((size) => {
       console.log('dm.sas7bdat, size:', size);
@@ -31,6 +32,7 @@ initWebR()
    })
    .then(async () => console.log('5 rows:', await read_xpt(path.join(__dirname, "ds.xpt"), '1:5')))
    .then(async () => console.log('5 rows, 3 col:', await read_xpt(path.join(__dirname, "ds.xpt"), '1:5', '1:3')))
+   .then(async () => { webR.close() })
    .catch(err => console.log(err))
 
 
