@@ -5,7 +5,7 @@ const {WebR} = require('webr');
     const webR = new WebR();
     await webR.init();
 
-    await webR.installPackages('haven');
+    await webR.installPackages(['haven', 'jsonlite']);
     //await webR.evalR(`install.packages("haven")`);
     await webR.evalR(`library(haven)`);
     
