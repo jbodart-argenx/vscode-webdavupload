@@ -107,6 +107,7 @@ console.log('typeof restApiUpload:', typeof restApiUpload);
 
 async function restApiCompare(param, config = null) {
    let statusMessage;
+   let localFile;
    const restApi = new RestApi();
    if (typeof param === 'string') {
       param = vscode.Uri.file(param);
@@ -116,9 +117,12 @@ async function restApiCompare(param, config = null) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
             console.log('(restApiCompare) param:', param, 'config:', config);
-            restApi.localFile = param.fsPath;
+            restApi.localFile = param;
             restApi.localFileStat = await vscode.workspace.fs.stat(param);
             restApi.getRemoteFilePath();   // get Remote File Path
+         } else {
+            debugger;
+            console.log('(restApiCompare) Unexpected param:', param);
          }
       } else {
          await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
@@ -127,6 +131,10 @@ async function restApiCompare(param, config = null) {
          if (!restApi.config) {
             return;
          }
+         console.log('(restApiCompare) restApi.localFile:', restApi.localFile);
+         console.log('(restApiCompare) param:', param);
+         localFile = restApi.localFile;
+         console.log('(restApiCompare) localFile:', localFile);
       }
       vscode.window.withProgress({
             location: vscode.ProgressLocation.Window,
@@ -135,18 +143,24 @@ async function restApiCompare(param, config = null) {
          }, async (progress) => {
             statusMessage = vscode.window.setStatusBarMessage('Fetching contents...');
             progress.report({ message: "Fetching contents...", increment: 10  });
-            await restApi.getRemoteFileContents(); // or : await restApi.getRemoteFileContents(param); ?
+            console.log('restApi.localFile:', restApi.localFile);
+            // await restApi.getRemoteFileContents(); // or : 
+            await restApi.getRemoteFileContents(param || restApi.localFile);
+            console.log('restApi.localFile:', restApi.localFile);
             statusMessage.dispose();
             progress.report({ message: "Comparing contents...", increment: 50  });
             statusMessage = vscode.window.setStatusBarMessage('Comparing contents...');
             await restApi.compareFileContents();
+            console.log('restApi.localFile:', restApi.localFile);
             progress.report({ message: "Done.", increment: 100  });
             statusMessage.dispose();
          });
    } catch (err) {
+      debugger;
       console.log(err);
       vscode.window.showErrorMessage(err.message);
    }
+   console.log('restApi.localFile:', restApi.localFile);
    statusMessage?.dispose();
 }
 console.log('typeof restApiCompare:', typeof restApiCompare);
@@ -267,7 +281,7 @@ async function restApiDownload(param, config = null, overwrite = null) {
       if (config && config.localRootPath && config.remoteEndpoint) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
-            restApi.localFile = param.fsPath;
+            restApi.localFile = param;
             // restApi.localFileStat = await vscode.workspace.fs.stat(param);
             restApi.getRemoteFilePath();   // get Remote File Path
          }
@@ -281,7 +295,7 @@ async function restApiDownload(param, config = null, overwrite = null) {
       }
       const pick_multiple = false;
       await restApi.getRemoteFileContents(param, pick_multiple);
-      await restApi.saveFileContentsAs(param.fsPath, overwrite);
+      await restApi.saveFileContentsAs(param, overwrite);
    } catch (err) {
       console.log(err);
    }
