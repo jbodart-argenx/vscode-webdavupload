@@ -1,14 +1,29 @@
 const vscode = require("vscode");
-const fs = require("fs");
-const path = require("path");
-const findConfig = require("find-config");
 const beautify = require("js-beautify");
 
 async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = false) {
    // Finds the first matching config file, if any, in the current directory, nearest ancestor, or user's home directory.
-   const configFile = findConfig("webdav.json", { cwd: absoluteWorkingDir });
-
-   const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(absoluteWorkingDir));
+   let configFile = null;
+   let searchFolder;
+   let configFileStat;
+   let workspaceFolder;
+   if (!(absoluteWorkingDir instanceof vscode.Uri)) {
+      absoluteWorkingDir = vscode.Uri.file(absoluteWorkingDir);
+   }
+   if (absoluteWorkingDir instanceof vscode.Uri) {
+      workspaceFolder = vscode.workspace.getWorkspaceFolder(absoluteWorkingDir);
+      searchFolder = absoluteWorkingDir;
+   } 
+   while (! configFile && searchFolder.toString() !== vscode.Uri.joinPath(searchFolder, '..').toString()) {
+      try {
+         const searchFile = vscode.Uri.joinPath(searchFolder, 'webdav.json');
+         configFileStat = await vscode.workspace.fs.stat(searchFile);
+         if (configFileStat.type === vscode.FileType.File) configFile = searchFile;
+      } catch (error) {
+         configFileStat = error;
+         searchFolder = vscode.Uri.joinPath(searchFolder, '..');
+      }
+   } 
 
    if (configFile == null) {
       console.warn(`(getEndpointConfigForCurrentPath) Endpoint config file webdav.json not found in current VScode root folder: ${absoluteWorkingDir}`);
@@ -20,13 +35,25 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
    console.log('configFile:', configFile);
    let restApiConfig;
    try {
-      restApiConfig = JSON.parse(fs.readFileSync(configFile));
+      // restApiConfig = JSON.parse(fs.readFileSync(configFile));
+      if (configFile instanceof vscode.Uri) {
+         // The vscode.workspace.fs.readFile method returns a Uint8Array, so we need to convert it to a string before parsing it as JSON.
+         const Uint8Content = await vscode.workspace.fs.readFile(configFile);
+         restApiConfig = JSON.parse(Buffer.from(Uint8Content).toString('utf8'));
+      } else {
+         // The vscode.workspace.fs.readFile method returns a Uint8Array, so we need to convert it to a string before parsing it as JSON.
+         const Uint8Content = await vscode.workspace.fs.readFile(vscode.Uri.file(configFile));
+         restApiConfig = JSON.parse(Buffer.from(Uint8Content).toString('utf8'));
+         // restApiConfig = JSON.parse(await vscode.workspace.fs.readFile(vscode.Uri.file(configFile)));  // wrong
+      }
       if (onlyRepo) {
          restApiConfig = restApiConfig.filter(conf => {
             return (/\/repo\b/.test(conf?.label ||'') || /\/repo\b/.test(conf?.["/"] || ''));
          });
       }
    } catch (error) {
+      console.warn(`(getEndpointConfigForCurrentPath) Error parsing config File: ${configFile}, ${error.message}`);
+      debugger;
       vscode.window.showErrorMessage(`Error parsing config File: ${configFile}, ${error.message}`)
    }
    
@@ -56,12 +83,13 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
 
    if (configFile != null && allEndpointsConfig) {
       // const endpointConfigDirectory = configFile.slice(0, configFile.lastIndexOf(path.sep));
-      const endpointConfigDirectory = path.dirname(configFile);
+      // const endpointConfigDirectory = path.dirname(configFile);
+      const endpointConfigDirectory = vscode.Uri.joinPath(configFile, '..');
 
-      const relativeWorkingDir = absoluteWorkingDir
-         .slice(endpointConfigDirectory.length)
+      const relativeWorkingDir = absoluteWorkingDir.path
+         .slice(endpointConfigDirectory.path.length)
          .replace(/\\/g, "/"); // On Windows replace \ with /
-
+      console.log('(getEndpointConfigForCurrentPath) relativeWorkingDir:', relativeWorkingDir);
       let endpointConfig = null;
       let currentSearchPath = relativeWorkingDir;
       let configOnCurrentSearchPath = null;
@@ -98,9 +126,9 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
          }
       }
 
-      currentSearchPath = endpointConfigDirectory.replace(
-         workspaceFolder.uri.fsPath, ''
-      )
+      currentSearchPath = endpointConfigDirectory.with({path: endpointConfigDirectory.path.replace(
+         workspaceFolder.uri.path, ''
+      )})
 
 
       config = {
