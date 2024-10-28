@@ -196,7 +196,10 @@ class RestApi {
                return this.logon();
             }
          } catch (err) {
-            console.log(err);
+            debugger;
+            console.log(`(logon) Error: ${err}`);
+            delete authTokens[this.host];
+            return this.logon();
          }
       }
       if (!this.encryptedPassword || typeof this.encryptedPassword !== 'string') {
@@ -540,21 +543,58 @@ class RestApi {
    };
 
    async downloadFile(fullUrl, requestOptions, versionLabel){
+      debugger;
+      let response, contentType, contentLength, transferEncoding, result, data, responseType, responseText;
       try {
-         let response = null;
+         if (fullUrl instanceof URL) {
+            this.remoteFile = fullUrl.pathname;
+            fullUrl = fullUrl.href;
+         } else if (typeof fullUrl === 'string') {
+            try {
+               this.remoteFile = new URL(fullUrl).pathname;
+            } catch (error) {
+               console.log('Unexpected fullUrl:', fullUrl);
+            }
+         }
+         response = null;
+         result = null;
+         data = null;
+         responseType = null;
          response = await axios.head(fullUrl, requestOptions);
-         const contentType = response.headers['content-type'];
-         const contentLength = response.headers['content-length'];
-         console.log('contentType:', contentType, 'contentLength:', contentLength);
-         let result = null;
-         let data = null;
-         let responseType = null;
+         contentType = response.headers['content-type'];
+         contentLength = response.headers['content-length'];
+         transferEncoding = response.headers['transfer-encoding'];
+         console.log('contentType:', contentType, 'contentLength:', contentLength, 'transferEncoding:', transferEncoding);
+         if (`${transferEncoding}`.toLowerCase() === 'chunked') {
+            requestOptions.responseType = 'stream';
+            response = await axios.get(fullUrl, requestOptions);
+            contentType = response.headers['content-type'];
+            contentLength = response.headers['content-length'];
+            // responseType = 'arraybuffer';
+            data = await new Promise((resolve, reject) => {
+               let chunks = '';
+               response.data.on('data', (chunk) => {
+                  chunks += chunk;
+               });
+   
+               response.data.on('end', () => {
+                  resolve(chunks);
+               });
+   
+               response.data.on('error', (error) => {
+                  reject(error);
+               });
+            });
+            if (data) response.data = data;
+         }
+         transferEncoding = response.headers['transfer-encoding'];
+         console.log('contentType:', contentType, 'contentLength:', contentLength, 'transferEncoding:', transferEncoding);
          if (contentType.match(/\bjson\b/)) {
             responseType = 'json';
          }
-         else if (contentLength && contentLength < 100_000_000) {
+         else if (responseType == null || contentLength < 100_000_000) {
             if (
-               /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
+               /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|html|xhtml\+xml|sql))/.test(contentType) 
                || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
             ) {
                responseType = 'text';
@@ -562,9 +602,9 @@ class RestApi {
                responseType = 'arraybuffer';
             }
          }
-         if (responseType) {
-            response = await axios.get(fullUrl, {...requestOptions, responseType});
-         }
+         // if (responseType) {
+         //    response = await axios.get(fullUrl, {...requestOptions, responseType});
+         // }
          if (response.status != 200) {
             if (contentType.match(/\bjson\b/)) {
                data = response.data;
@@ -583,33 +623,48 @@ class RestApi {
                result = response.data;
                result = `${response.status}, ${response.statusText}: Result: ${result}`;
             }
+            debugger;
             throw new Error(`HTTP error! ${result}`);
          }
-         if (contentLength && contentLength < 100_000_000) {
+         if (transferEncoding?.toLowerCase() === 'chunked' || contentLength < 500_000_000) {
             if (
-               /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
+               /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|html|xhtml\+xml|sql))/.test(contentType) 
                || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
             ) {
-               const responseText = response.data;
+               if ( response.data instanceof ArrayBuffer) {
+                  responseText =  new TextDecoder('utf-8').decode(response.data);
+               } else {
+                  responseText = response.data;
+               }
+               if (! Array.isArray(this.fileContents)) this.fileContents = [];
                this.fileContents.push(responseText);
             } else  {
                // throw new Error(`File with content-length: ${contentLength} NOT downloaded given unexpected content-type: ${contentType}!`)
                const arrayBuffer = response.data;
+               if (! Array.isArray(this.fileContents)) this.fileContents = [];
                this.fileContents.push(Buffer.from(arrayBuffer));
             }
+            if (! Array.isArray(this.fileVersions)) this.fileVersions = [];
             this.fileVersions.push(versionLabel || '');
+            if (! Array.isArray(this.fileContentLength)) this.fileContentLength = [];
             this.fileContentLength.push(contentLength);
+            if (! Array.isArray(this.fileContentType)) this.fileContentType = [];
             this.fileContentType.push(contentType);
          } else {
+            debugger;
             throw new Error(`File with content-type: ${contentType} NOT downloaded given unexpected content-length: ${contentLength}!`)
          }
       } catch (error) {
+         debugger;
          console.error("Error fetching Remote File Contents:", error);
          vscode.window.showErrorMessage("Error fetching Remote File Contents:", error.message);
+         if (! Array.isArray(this.fileContents)) this.fileContents = [];
          this.fileContents.push(error.message);
+         if (! Array.isArray(this.fileVersions)) this.fileVersions = [];
          this.fileVersions.push(null);
       }
    };
+
 
    async getFileStat(param) {
       let fileStat;
@@ -920,12 +975,17 @@ class RestApi {
          try {
             response = await axios.head(fullUrl, requestOptions);
          } catch(error) {
+            debugger;
             console.log(error);
             if (error.status === 404) {
                console.warn('File not found:', filePath);
                vscode.window.showErrorMessage(`File not found: ${filePath}`);
                return error;
             }
+         }
+         if (! response.headers) {
+            debugger;
+            console.log('response.headers:', response.headers);
          }
          let contentType = response.headers['content-type'];
          console.log('contentType:', contentType);
