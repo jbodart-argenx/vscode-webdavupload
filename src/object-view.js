@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const os = require('os');
 
 // This is the async function that opens a webview and displays an object / collects edits from the user
 async function getObjectView(
@@ -60,28 +61,30 @@ async function getObjectView(
                case('openLink'):
                   debugger;
                   let url;
+                  let newRestApi;
                   try {
                      url = new URL(message.url);
                      console.log('openLink:', url.href);
                      debugger;
-                     if (restApi && restApi.logon && restApi.getRemoteFileContents && restApi.viewFileContents) {
-                        const host = url.hostname;
-                        if (/^\w+(-\w+)?\.ondemand\.sas\.com$/.test(host)) {
-                           restApi.host = host;
-                        } else {
-                           debugger;
-                           console.error(`(getObjectView): openLink: Unexpected host: ${host}`);
-                        }
-                        restApi.logon();
+                     if (restApi && typeof restApi.constructor === 'function' && restApi.logon && restApi.getRemoteFileContents && restApi.viewFileContents) {
+                        let host = url.hostname;
+                        if (! /^\w+(-\w+)?\.ondemand\.sas\.com$/.test(host)) {
+                           host = restApi.host;
+                        } 
+                        let username = restApi.username || os.userInfo().username;
+                        newRestApi = new restApi.constructor(username, host);
+                        newRestApi.authToken = restApi.authToken;
+                        newRestApi.logon();
                         const requestOptions = {
                            headers: {
-                              "X-Auth-Token": restApi.authToken
+                              "X-Auth-Token": newRestApi.authToken
                            },
                            maxRedirects: 5 // Optional, axios follows redirects by default
                         };
-                        restApi.downloadFile(url, requestOptions).then(p => {
-                           console.log(p); 
-                           restApi.viewFileContents();
+                        newRestApi.downloadFile(url, requestOptions).then(p => {
+                           debugger;
+                           console.log('newRestApi.downloadFile() returned:', p); 
+                           newRestApi.viewFileContents();
                         }
                         ).catch(err => {
                            console.log(err);
