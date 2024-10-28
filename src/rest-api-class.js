@@ -65,7 +65,7 @@ class RestApi {
          param = vscode.window.activeTextEditor?.document?.uri;
       }
       if (param instanceof vscode.Uri) {
-         this.localFile = param.fsPath;
+         this.localFile = param;
          this.localFileStat = null;
          while(this.localFileStat == null && vscode.Uri.joinPath(param, '..') !== param) {
             this.localFileStat = await this.getFileStat(param);
@@ -82,7 +82,7 @@ class RestApi {
          return;
       }
 
-      const workingDir = path.dirname(this.localFile);
+      const workingDir = path.posix.dirname(vscode.Uri.joinPath(this.localFile, '..').path);
       console.log('(getEndPointConfig) workingDir:', workingDir);
 
       // Read configuration
@@ -108,18 +108,17 @@ class RestApi {
             vscode.window.activeTextEditor?.document?.uri);
       console.log("workingWSFolder:\n", beautify(JSON.stringify(workingWSFolder)));
 
-      const remoteFile = this.localFile
+      const remoteFile = (this.localFile.path ? this.localFile.path : this.localFile)
          .replace(/\\/g, "/")
          .replace(
-            path.posix.join(workingWSFolder?.uri.fsPath.replace(/\\/g, "/"), config.localRootPath.replace(/\\/g, "/")),
+            path.posix.join(workingWSFolder.uri ? 
+               workingWSFolder.uri.path.replace(/\\/g, "/") :
+               workingWSFolder.toString().replace(/\\/g, "/"),
+            config.localRootPath.path ?
+               config.localRootPath.path.replace(/\\/g, "/") :
+               config.localRootPath.replace(/\\/g, "/")),
             ""
          );
-      // const remoteFile = this.localFile
-      //    .replace(/\\/g, "/")
-      //    .replace(
-      //       new URL(this.config.remoteEndpoint.url).pathname + config.localRootPath,
-      //       ""
-      //    );
       console.log('remoteFile:', remoteFile);
       this.remoteFile = remoteFile;
       console.log('this.remoteFile:', this.remoteFile);
@@ -315,7 +314,7 @@ class RestApi {
          param = vscode.Uri.file(param);
       }
       if (param instanceof vscode.Uri) {
-         this.localFile = param.fsPath;
+         this.localFile = param;
       }
       await this.logon();  // check that authToken is still valid
       const apiUrl = `https://${this.host}/lsaf/api`;
@@ -327,7 +326,7 @@ class RestApi {
       console.log('urlPath:', urlPath)
       const filePath = this.remoteFile;
       let response, contentType, contentLength, transferEncoding, result, data;
-      const apiRequest = `${urlPath}${filePath}?component=contents`;
+      const apiRequest = `${path.posix.join(urlPath, filePath)}?component=contents`;
       const requestOptions = {
          headers: { "X-Auth-Token": this.authToken },
          maxRedirects: 5, // Optional, axios follows redirects by default
@@ -398,6 +397,9 @@ class RestApi {
 
 
    async getRemoteFileContents(param, pick_multiple = true) {
+      console.log('param:', param);
+      await this.logon();  // check that authToken is still valid
+      console.log('param:', param);
       if (typeof param === 'string') {
          param = vscode.Uri.file(param);
       }
@@ -406,22 +408,21 @@ class RestApi {
          debugger;
       }
       if (param instanceof vscode.Uri) {
-         this.localFile = param.fsPath;
+         this.localFile = param;
       }
-      await this.logon();  // check that authToken is still valid
       const apiUrl = `https://${this.host}/lsaf/api`;
       const urlPath = new URL(this.config.remoteEndpoint.url).pathname
          .replace(/\/lsaf\/webdav\/work\//, '/workspace/files/')
          .replace(/\/lsaf\/webdav\/repo\//, '/repository/files/')
          .replace(/\/$/, '')
          ;
-      console.log('urlPath:', urlPath)
+      console.log('urlPath:', urlPath);
       const filePath = this.remoteFile;
       let selectedVersion = null;
       let selectedVersions = null;
       // let compareVersion = null;
       if (/\/repository\/files\//.test(urlPath)) {
-         await this.getRemoteFileVersions();
+         await this.getRemoteFileVersions(param);
          let versions = this.fileVersions;
          const MAX_ITEMS = 30;
          if (Array.isArray(versions.items) && versions.items.filter(i => i.version).length > 0) {
@@ -460,7 +461,7 @@ class RestApi {
 
       for (let i = 0; i < selectedVersions.length; i++) {
 
-         const apiRequest = `${urlPath}${filePath}?component=contents` + (selectedVersions[i]?.label ? `&version=${selectedVersions[i].label}` : '');
+         const apiRequest = `${path.posix.join(urlPath, filePath)}?component=contents` + (selectedVersions[i]?.label ? `&version=${selectedVersions[i].label}` : '');
          const requestOptions = {
             headers: { "X-Auth-Token": this.authToken },
             maxRedirects: 5 // Optional, axios follows redirects by default
@@ -669,7 +670,7 @@ class RestApi {
    async getFileStat(param) {
       let fileStat;
       if (typeof param === 'string') {
-         param = vscode.Uri.file(param);
+         param = vscode.Uri.parse(param);
       }
       if (param instanceof vscode.Uri) {
          // param is a Uri
@@ -687,9 +688,9 @@ class RestApi {
          param = vscode.Uri.file(param);
       }
       if (param instanceof vscode.Uri) {
-         this.localFile = param.fsPath;
+         this.localFile = param;
       } else {
-         this.localFile = vscode.window.activeTextEditor?.document?.uri.fsPath;
+         this.localFile = vscode.window.activeTextEditor?.document?.uri;
       }
       if (!this.localFile) {
          console.error('Cannot get Remote File Properties of a non-specified file:', this.localFile);
@@ -698,7 +699,13 @@ class RestApi {
       }
       await this.logon();
       const apiUrl = `https://${this.host}/lsaf/api`;
-      const fileStat = await this.getFileStat(this.localFile);
+      let fileStat;
+      try{
+         fileStat = await this.getFileStat(this.localFile);
+      } catch(err) {
+         debugger;
+         console.log(err);
+      }
       console.log('Local File:', this.localFile, 'fileStat:', fileStat);
       let itemType;
       if (fileStat.type === vscode.FileType.File) {
@@ -718,9 +725,9 @@ class RestApi {
          .replace(/\/$/, '')
          ;
       console.log('urlPath:', urlPath)
-      const filePath = this.remoteFile;
+      const filePath = this.remoteFile?.path ? this.remoteFile.path : this.remoteFile;
       // console.log('filePath:', filePath)
-      const apiRequest = `${urlPath}${filePath}?component=properties`;
+      const apiRequest = `${path.posix.join(urlPath, filePath)}?component=properties`;
       const requestOptions = {
          headers: { "X-Auth-Token": this.authToken },
          maxRedirects: 5 // Optional, axios follows redirects by default
@@ -774,7 +781,7 @@ class RestApi {
          param = vscode.Uri.file(param);
       }
       if (param instanceof vscode.Uri) {
-         this.localFile = param.fsPath;
+         this.localFile = param;
       } else {
          console.error('(getLocalFolderContents) unexpected parameter:', param);
          vscode.window.showErrorMessage('(getLocalFolderContents) unexpected parameter:', param);
@@ -798,32 +805,42 @@ class RestApi {
 
       let folderContents, folderContentsText;
       try {
-         const files = await fs.promises.readdir(folderPath); // Asynchronous read of directory contents
+         // const files = await fs.promises.readdir(folderPath); // Asynchronous read of directory contents
+         const files = await vscode.workspace.fs.readDirectory(folderPath);
 
          folderContents = await Promise.all(
-            files.map(async file => {
-               const filePath = path.join(folderPath, file);
-               const stats = await fs.promises.stat(filePath); // Asynchronous stat call
+            files.map(async ([name, type]) => {
+               // const filePath = path.join(folderPath, file);
+               const filePath = vscode.Uri.joinPath(folderPath, name);
+               // const stats = await fs.promises.stat(filePath); // Asynchronous stat call
+               const stats = await vscode.workspace.fs.stat(filePath); // Asynchronous stat call
                let isBinary = null;
                let md5sum = '';
+               let fileType = '';
 
-               if (stats.isFile()) {
-                  // Calculate MD5 using the previously defined calculateMD5WithLF() function
-                  isBinary = isBinaryFile(filePath);
+               // if (stats.isFile()) {
+               if (type === vscode.FileType.File && filePath.scheme === "file") {
+                  fileType = 'file';
+                  isBinary = isBinaryFile(filePath.fsPath);
                   if (isBinary) {
-                     md5sum = await fileMD5sum(filePath);
+                     md5sum = await fileMD5sum(filePath.fsPath);
                   } else {
-                     // md5sum = await fileMD5sumConvertCRLF(filePath);
-                     md5sum = fileMD5sumStripBom(filePath);
+                     md5sum = fileMD5sumStripBom(filePath.fsPath);
                   }
                } else {
+                  if (type === vscode.FileType.Directory) {
+                     fileType = 'directory';
+                  } else if (type === vscode.FileType.SymbolicLink) {
+                     fileType = 'symlink';
+                  } 
                   md5sum = '';
                }
 
                return {
-                  name: file,
+                  name: name,
+                  type: fileType,
                   size: stats.size,
-                  mtime: stats.mtime.toISOString(),
+                  mtime: new Date(stats.mtime).toISOString(),
                   md5sum: md5sum, // Add MD5 checksum to the returned object
                };
             })
@@ -851,9 +868,9 @@ class RestApi {
          param = vscode.Uri.file(param);
       }
       if (param instanceof vscode.Uri) {
-         this.localFile = param.fsPath;
+         this.localFile = param;
       } else {
-         this.localFile = vscode.window.activeTextEditor?.document?.uri.fsPath;
+         this.localFile = vscode.window.activeTextEditor?.document?.uri;
       }
       if (!this.localFile) {
          console.error('Cannot get Remote Folder Contents of a non-specified path:', this.localFile);
@@ -898,13 +915,13 @@ class RestApi {
          .replace(/\/lsaf\/webdav\/repo\//, `/repository/${itemType}s/`)
          .replace(/\/$/, '')
          ;
-      console.log('urlPath:', urlPath)
+      console.log('urlPath:', urlPath);
       const filePath = this.remoteFile;
       // console.log('filePath:', filePath)
-      const apiRequest = `${urlPath}${filePath}?component=children&expand=item&limit=10000`;
+      const apiRequest = `${path.posix.join(urlPath, filePath)}?component=children&expand=item&limit=10000`;
       const requestOptions = {
          headers: { "X-Auth-Token": this.authToken },
-        maxRedirects: 5 // Optional, axios follows redirects by default
+         maxRedirects: 5 // Optional, axios follows redirects by default
       };
       try {
          // const response = await fetch(apiUrl + apiRequest, requestOptions);
@@ -950,8 +967,13 @@ class RestApi {
 
 
    async getRemoteFileVersions(param) {
+      if (typeof param === 'string') {
+         param = vscode.Uri.file(param);
+      }
       if (param instanceof vscode.Uri) {
-         this.localFile = param.fsPath;
+         this.localFile = param;
+      } else if (vscode.window.activeTextEditor?.document?.uri) {
+         this.localFile = vscode.window.activeTextEditor?.document?.uri;
       }
       await this.logon();
       const apiUrl = `https://${this.host}/lsaf/api`;
@@ -961,8 +983,8 @@ class RestApi {
          .replace(/\/$/, '')
          ;
       console.log('urlPath:', urlPath)
-      const filePath = this.remoteFile;
-      const apiRequest = `${urlPath}${filePath}?component=versions`;
+      const filePath = this.remoteFile.path ? this.remoteFile.path : this.remoteFile;
+      const apiRequest = `${path.posix.join(urlPath, filePath)}?component=versions`;
       const requestOptions = {
          headers: { "X-Auth-Token": this.authToken },
          maxRedirects: 5 // Optional, axios follows redirects by default
@@ -1097,7 +1119,8 @@ class RestApi {
                return;
          }
 
-         outFile = path.join(folderUri[0].fsPath, filename);
+         // outFile = path.join(folderUri[0].fsPath, filename);
+         outFile = vscode.Uri.joinPath(folderUri[0], filename);
 
       } else if (! outFile) {
          outFile = this.localFile;
@@ -1106,7 +1129,9 @@ class RestApi {
          if (outFile && this.fileContents[0] != null) {
             let outFileExists = false;
             try {
-               await fs.promises.stat(outFile);
+               // Will throw exception if file does not exist
+               // await fs.promises.stat(outFile);
+               await vscode.workspace.fs.stat(outFile);
                outFileExists = true;
                console.log(`outFile exists: ${outFile}`);
             } catch (error) {
@@ -1127,7 +1152,11 @@ class RestApi {
                   return;
                } 
             }
-            await fs.promises.writeFile(outFile, this.fileContents[0]);
+            // Convert the string content to a Uint8Array which is required by the vscode.workspace.fs.writeFile() method.
+            const encoder = new TextEncoder();
+            const encodedContent = encoder.encode(this.fileContents[0]);
+            await vscode.workspace.fs.writeFile(outFile, encodedContent);  
+            // await fs.promises.writeFile(outFile, this.fileContents[0]);
             console.log(`Saved as ${outFile}`);
             vscode.window.showInformationMessage(`Saved as ${outFile}.`)
          }
@@ -1326,7 +1355,9 @@ class RestApi {
 
    async compareFileContents() {
       // Write the remote file to a local temporary file
-      const extension = this.localFile.slice(this.localFile.lastIndexOf("."));
+      const extension = this.localFile ?
+         path.extname(this.localFile?.path ? this.localFile.path : this.localFile) :
+         path.extname(this.remoteFile?.path ? this.remoteFile.path : this.remoteFile);
       this.tempFiles = [];
       try {
          if (!this.fileContents || this.fileContents?.length === 0) {
@@ -1371,10 +1402,18 @@ class RestApi {
                      `Comparing: ${this.config.label || this.host.split(".")[0]} remote file ${fileName}${baseVersionLabel} with ${compVersionLabel}`
                   );
                }
+               if (!this.localFile) {
+                  debugger;
+                  console.log('(compareFileContents) unexpected this.localFile:', this.localFile);
+               }         
                await vscode.commands.executeCommand(
                   "vscode.diff",
                   vscode.Uri.file(path.normalize(this.tempFiles[i].name)),
-                  vscode.Uri.file(i === 0 ? this.localFile : path.normalize(this.tempFiles[i - 1].name)),
+                  i === 0 ?
+                     (this.localFile?.path ?
+                        this.localFile :
+                        vscode.Uri.file(path.normalize(this.localFile))) :
+                     vscode.Uri.file(path.normalize(this.tempFiles[i - 1].name)),
                   fileName + ` (${this.config.label || this.host.split(".")[0]}${compVersionLabel} ↔ ${baseVersionLabel})`,
                   {
                      preview: false,
@@ -1478,10 +1517,17 @@ class RestApi {
 
    async getFormData(useEditorContents = true, filePath) {
       let filename;
-      if (filePath instanceof vscode.Uri) {
-         filePath = filePath.fsPath;
-      }
+      // if (filePath instanceof vscode.Uri) {
+      //    filePath = filePath.fsPath;
+      // }
       filePath = filePath || this.localFile || this.remoteFile;
+      if (filePath === this.remoteFile) {
+         debugger;
+         console.log('Valid case? filePath = this.remoteFile =', filePath);
+      }
+      if (filePath && typeof filePath === 'string') {
+         filePath = vscode.Uri.file(filePath);
+      }
       console.log("filePath:", filePath);
       const formdata = new FormData();
       if (useEditorContents) {
@@ -1493,7 +1539,7 @@ class RestApi {
          bufferStream.push(null);    // Signal end of the stream
 
          // filename = this.localFile;
-         filename = ((filePath || this.localFile) ?? 'editorContents.txt')?.split(/[\\\/]/).slice(-1)[0];
+         filename = ((filePath.path || this.localFile.path) ?? 'editorContents.txt')?.split(/[\\\/]/).slice(-1)[0];
          console.log('filename:', filename);
 
          // Append the file-like content to the FormData object with the key 'uploadFile'
@@ -1501,7 +1547,7 @@ class RestApi {
          // formdata.append('uploadFile', new Blob([this.fileContents]), filename);    // fails because Blob is not a stream
          console.log('formdata:', formdata);
       } else {
-         filename = filePath.split(/[\\\/]/).slice(-1)[0];
+         filename = filePath.path.split(/[\\\/]/).slice(-1)[0];
          console.log('filename:', filename);
          /*
          const data = await fs.promises.readFile(this.localFile);
@@ -1511,7 +1557,23 @@ class RestApi {
          formdata.append('uploadFile', Buffer.from(fileContents), filename);    // works
          */
          // formdata.append('uploadFile', new Blob([fileContents]), filename);  // fails because Blob is not a stream
-         formdata.append('uploadFile', fs.createReadStream(filePath || this.localFile), filename);
+         // formdata.append('uploadFile', fs.createReadStream(filePath || this.localFile), filename);   // using local filesystem
+         // Read the file contents using vscode workspace filesystem
+         let fileUri;
+         if (filePath && typeof filePath === 'string') {
+            fileUri = vscode.Uri.file(filePath);
+         } else if (filePath && filePath instanceof vscode.Uri) {
+            fileUri = filePath;
+         } else if (this.localFile.path) {
+            fileUri = this.localFile;
+         } else {
+            fileUri = vscode.Uri.file(this.localFile);
+         }
+         const fileContents = await vscode.workspace.fs.readFile(fileUri);
+         // Convert Uint8Array to Buffer
+         const buffer = Buffer.from(fileContents);
+         // Append the file to the FormData
+         formdata.append('uploadFile', buffer, filename);
          console.log('formdata:', formdata);
       }
       return [formdata, filename];
@@ -1538,10 +1600,13 @@ class RestApi {
       //       workingWSFolder.uri.fsPath.replace(/\\/g, "/") + this.config.localRootPath,
       //       ""
       //    );
-      const remoteFile = this.localFile
+      const remoteFile = (this.localFile.path ? this.localFile.path : `${this.localFile}`)
          .replace(/\\/g, "/")
          .replace(
-            path.posix.join(workingWSFolder?.uri.fsPath.replace(/\\/g, "/"), this.config.localRootPath.replace(/\\/g, "/")),
+            path.posix.join(workingWSFolder?.uri.fsPath.replace(/\\/g, "/"),
+            this.config.localRootPath.path ?
+               this.config.localRootPath.path.replace(/\\/g, "/") :
+               `${this.config.localRootPath}`.replace(/\\/g, "/")),
             ""
          );
 
@@ -1577,7 +1642,7 @@ class RestApi {
          console.log('urlPath:', urlPath)
          const filePath = `${this.remoteFile}`.replace(/[\/\\]+$/, '');  // remove any trailing (back)slash(es)
          console.log('filePath:', filePath);
-         let apiRequest = `${urlPath}${filePath}?action=uploadandexpand&createParents=true&overwrite=true`;
+         let apiRequest = `${path.posix.join(urlPath, filePath)}?action=uploadandexpand&createParents=true&overwrite=true`;
          // await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
          await this.enterMultiLineComment(comment || `Add / Update ${(this.localFile?.split(/[\\\/]/) ?? '...').slice(-1)}\n\n`);
          if (this.comment) {
@@ -1685,6 +1750,7 @@ class RestApi {
    }
 
    async uploadFile(param) {
+      // debugger ;
       console.log('param:', param);
       let useEditorContents = false;
       if (typeof param === 'string') {
@@ -1695,11 +1761,11 @@ class RestApi {
       } else if (param instanceof vscode.Uri) {
          const fileStat = await this.getFileStat(param);
          if (fileStat.type === vscode.FileType.File) {
-            this.localFile = param.fsPath;
+            this.localFile = param;
          } else if (fileStat.type === vscode.FileType.Directory) {
-            return vscode.window.showWarningMessage(`Upload File: ${param.fsPath} is a folder!`);
+            return vscode.window.showWarningMessage(`Upload File: ${param.path} is a folder!`);
          } else {
-            return vscode.window.showWarningMessage(`Upload File: ${param} is neither a file nor a folder!`);
+            return vscode.window.showWarningMessage(`Upload File: ${param.path} is neither a file nor a folder!`);
          }
       } else if (param === undefined) {
          useEditorContents = true;
@@ -1718,7 +1784,8 @@ class RestApi {
             vscode.window.showWarningMessage(`No local File specified, aborting upload.`);
             return;
          }
-         if (!fs.existsSync(this.localFile)) {
+         // if (!fs.existsSync(this.localFile)) {
+         if (!this.getFileStat(this.localFile)) {
             console.log(`Local File "${this.localFile}" not found, aborting upload.`);
             vscode.window.showWarningMessage(`Local File "${this.localFile}" not found, aborting upload.`);
             return;
@@ -1734,9 +1801,9 @@ class RestApi {
       console.log('urlPath:', urlPath)
       const filePath = this.remoteFile;
       console.log('filePath:', filePath);
-      let apiRequest = `${urlPath}${filePath}?action=upload&version=MAJOR&createParents=true&overwrite=true`;
+      let apiRequest = `${path.posix.join(urlPath, filePath)}?action=upload&version=MINOR&createParents=true&overwrite=true`;
       // await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
-      await this.enterMultiLineComment(`Add / Update ${(this.localFile?.split(/[\\\/]/) ?? '...').slice(-1)}\n\n`);
+      await this.enterMultiLineComment(`Add / Update ${((this.localFile.path || this.localFile).toString().split(/[\\\/]/) || '...').slice(-1)}\n\n`);
       if (this.comment) {
          apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
          // apiRequest = `${apiRequest}&comment=${this.comment}`;
@@ -1829,6 +1896,7 @@ class RestApi {
          } else {
             result = response.data;
          }
+         console.log('(uploadFile) result:', result);
          if (status?.type === 'FAILURE') {
             message = `File "${filename}" upload failed: ` + status?.message || result;
          } else if (status?.type === 'SUCCESS') {
@@ -1848,9 +1916,10 @@ class RestApi {
 
    
    async submitJob(argJob, argVersion, argParams) {
+      // debugger ;
       console.log('job:', argJob, 'version:', argVersion, '\nparams:\n', argParams);
       if (argJob instanceof vscode.Uri) {
-         argJob = argJob.fsPath;
+         argJob = argJob.path;
       }
       if (typeof argJob !== 'string') {
          console.warn(`(submitJob) invalid argJob type: ${typeof argJob} ${argJob}`);
@@ -1868,9 +1937,9 @@ class RestApi {
       console.log('submitHost:', submitHost, 'jobType:', jobType, 'urlPath:', urlPath, 'jobPathPrefix:', jobPathPrefix);
       const jobPath = this.remoteFile;
       const jobName = path.basename(jobPath);
-      const fullJobPath = jobPathPrefix + jobPath;
+      const fullJobPath = path.posix.join(jobPathPrefix, jobPath);
       console.log('fullJobPath:', fullJobPath);
-      let apiRequest = `${urlPath}${encodeURI(jobPath)}?action=run`;
+      let apiRequest = `${path.posix.join(urlPath, encodeURI(jobPath))}?action=run`;
       if (/\d+\.\d+/.test(`${argVersion}`.trim())) {
          apiRequest = `${apiRequest}&version=${argVersion.toString().trim()}`;
       }
@@ -2195,8 +2264,6 @@ class RestApi {
          }
          const contentType = response.headers['content-type'];
          console.log('contentType:', contentType);
-         // debugger;
-         // console.log('response.data:', response.data);
       }
       return data;
    }
