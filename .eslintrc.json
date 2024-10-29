@@ -42,7 +42,10 @@
         "import/no-cycle": ["error", { "maxDepth": 10 }],
         "no-debugger": "off",
         "no-extra-semi": "off",
-        "no-useless-escape": "off"
+        "no-useless-escape": "off",
+        "require-await": "error",
+        "promise/always-return": "error",
+        "promise/catch-or-return": "error"
     },
     "overrides": [
         {
