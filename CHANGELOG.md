@@ -72,3 +72,16 @@
 ## 1.1.2
 
 - Fix issue with configuration file webdav.json not found in case local file/folder does not exist
+
+## 1.1.3
+
+- Prompt for (new) credentials in case of logon() failure
+- Fix issue with  zip file extraction by using 'original-fs' package
+- Add submitJob command
+- Monitor LSAF job submission, get, parse and display job manifest upon completion
+- Handle 'chunked' transferEncoding in downloads
+- Improve object viewing using (nested) HTML tables
+- Improve performance of HTML table sorting
+- Upload File to Repo creates new minor version
+- Report & check md5sum of downloaded files
+- Replace most filesystem access methods from node 'fs' to 'vscode.workspace.fs' (should allow access to remote & virtual filesystems)
