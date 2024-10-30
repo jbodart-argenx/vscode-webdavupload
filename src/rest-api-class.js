@@ -18,6 +18,7 @@ const { read_sas, read_xpt } = require('./read_sas.js');
 const axios = require('axios');
 const xml2js = require('xml2js');
 const { getObjectView } = require("./object-view.js");
+const crypto = require('crypto');
 
 console.log('(rest-api-class.js) typeof getObjectView:', typeof getObjectView);
 
@@ -97,7 +98,7 @@ class RestApi {
          return;
       }
 
-      console.log("config:\n", beautify(JSON.stringify(config)));
+      console.log("config:\n", config);
       this.config = config;
 
       const workingWSFolder = vscode.workspace.getWorkspaceFolder(
@@ -396,7 +397,8 @@ class RestApi {
    };
 
 
-   async getRemoteFileContents(param, pick_multiple = true) {
+   async getRemoteFileContents(param, pick_multiple = true, expectedMd5sum = null) {
+      console.log('\n=== getRemoteFileContents ===');
       console.log('param:', param);
       await this.logon();  // check that authToken is still valid
       console.log('param:', param);
@@ -405,10 +407,23 @@ class RestApi {
       }
       if (param instanceof URL) {
          param = vscode.Uri.from(param);
-         debugger;
+         debugger ;
       }
       if (param instanceof vscode.Uri) {
          this.localFile = param;
+         this.remoteFile = null;
+      }
+      console.log(`(getRemoteFileContents) this.localFile: ${this.localFile}`);
+      console.log(`(getRemoteFileContents) this.remoteFile: ${this.remoteFile}`);
+      if (! this.remoteFile) {
+         if (this.localFile) {
+            this.getRemoteFilePath();
+            console.log(`(getRemoteFileContents) this.remoteFile: ${this.remoteFile}`);
+         } else {
+            debugger;
+            console.log(`(getRemoteFileContents) Missing info, returning: this.remoteFile: ${this.remoteFile}, this.localFile: ${this.localFile}`);
+            return;
+         }
       }
       const apiUrl = `https://${this.host}/lsaf/api`;
       const urlPath = new URL(this.config.remoteEndpoint.url).pathname
@@ -422,7 +437,7 @@ class RestApi {
       let selectedVersions = null;
       // let compareVersion = null;
       if (/\/repository\/files\//.test(urlPath)) {
-         await this.getRemoteFileVersions(param);
+         await this.getRemoteFileVersions(param || this.localFile);
          let versions = this.fileVersions;
          const MAX_ITEMS = 30;
          if (Array.isArray(versions.items) && versions.items.filter(i => i.version).length > 0) {
@@ -469,70 +484,10 @@ class RestApi {
          try {
             // const response = await fetch(apiUrl + apiRequest, requestOptions);
             const fullUrl = encodeURI(apiUrl + apiRequest);  
+            console.log('(getRemoteFileContents) fullUrl:', fullUrl);
             const selectedVersionLabel = selectedVersions[i]?.label || ''; 
-            this.downloadFile(fullUrl, requestOptions, selectedVersionLabel);       
-            // let response = null;
-            // response = await axios.head(fullUrl, requestOptions);
-            // const contentType = response.headers['content-type'];
-            // const contentLength = response.headers['content-length'];
-            // console.log('contentType:', contentType, 'contentLength:', contentLength);
-            // let result = null;
-            // let data = null;
-            // let responseType = null;
-            // if (contentType.match(/\bjson\b/)) {
-            //    responseType = 'json';
-            // }
-            // else if (contentLength && contentLength < 100_000_000) {
-            //    if (
-            //       /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
-            //       || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
-            //    ) {
-            //       responseType = 'text';
-            //    } else {
-            //       responseType = 'arraybuffer';
-            //    }
-            // }
-            // if (responseType) {
-            //    response = await axios.get(fullUrl, {...requestOptions, responseType});
-            // }
-            // if (response.status != 200) {
-            //    if (contentType.match(/\bjson\b/)) {
-            //       data = response.data;
-            //       if (data.message) {
-            //          result = data.details || data.message;
-            //          if (data.remediation && data.remediation !== "No remediation message is available.") {
-            //             result = `${result.trim()}, remediation: ${data.remediation}`;
-            //          }
-            //       } else {
-            //          result = beautify(JSON.stringify(data), {
-            //             indent_size: 2,
-            //             space_in_empty_paren: true,
-            //          });
-            //       }
-            //    } else {
-            //       result = response.data;
-            //       result = `${response.status}, ${response.statusText}: Result: ${result}`;
-            //    }
-            //    throw new Error(`HTTP error! ${result}`);
-            // }
-            // if (contentLength && contentLength < 100_000_000) {
-            //    if (
-            //       /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|xhtml\+xml|sql))/.test(contentType) 
-            //       || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
-            //    ) {
-            //       const responseText = response.data;
-            //       this.fileContents.push(responseText);
-            //    } else  {
-            //       // throw new Error(`File with content-length: ${contentLength} NOT downloaded given unexpected content-type: ${contentType}!`)
-            //       const arrayBuffer = response.data;
-            //       this.fileContents.push(Buffer.from(arrayBuffer));
-            //    }
-            //    this.fileVersions.push(selectedVersions[i]?.label || '');
-            //    this.fileContentLength.push(contentLength);
-            //    this.fileContentType.push(contentType);
-            // } else {
-            //    throw new Error(`File with content-type: ${contentType} NOT downloaded given unexpected content-length: ${contentLength}!`)
-            // }
+            await this.downloadFile(fullUrl, requestOptions, selectedVersionLabel, Array.isArray(expectedMd5sum) ? expectedMd5sum[i] : expectedMd5sum);   
+            console.log('this.fileContents.length =', this.fileContents.length);
          } catch (error) {
             console.error("Error fetching Remote File Contents:", error);
             vscode.window.showErrorMessage("Error fetching Remote File Contents:", error.message);
@@ -541,52 +496,90 @@ class RestApi {
          }
 
       }
+      // debugger ;
+      console.log('this.fileContents?.length =', this.fileContents?.length);
+      console.log('Done === getRemoteFileContents ===\n');
+      console.log('');
    };
 
-   async downloadFile(fullUrl, requestOptions, versionLabel){
-      debugger;
+   async downloadFile(fullUrl, requestOptions, versionLabel, expectedMd5sum = null){
+      console.log('\n=== downloadFile ===');
       let response, contentType, contentLength, transferEncoding, result, data, responseType, responseText;
       try {
+         console.log('this.config:', this.config);
+         console.log('this.config?.localRootPath:', this.config?.localRootPath);
+         console.log('this.config?.remoteEndpoint:', this.config?.remoteEndpoint);
+         console.log('fullUrl:', fullUrl);
          if (fullUrl instanceof URL) {
-            this.remoteFile = fullUrl.pathname;
+            this.remoteFile = fullUrl.pathname
+               .replace(`${this.config?.remoteEndpoint?.url?.pathname}`
+                     .replace('/lsaf/webdav/repo/', '/lsaf/api/repository/files/')
+                     .replace('/lsaf/webdav/work/', '/lsaf/api/workspace/files/')
+                     .replace(/\/+$/, '')
+                  , '');
             fullUrl = fullUrl.href;
          } else if (typeof fullUrl === 'string') {
             try {
-               this.remoteFile = new URL(fullUrl).pathname;
+               this.remoteFile = new URL(fullUrl).pathname
+                  .replace(`${new URL(this.config?.remoteEndpoint?.url).pathname}`
+                        .replace('/lsaf/webdav/repo/', '/lsaf/api/repository/files/')
+                        .replace('/lsaf/webdav/work/', '/lsaf/api/workspace/files/')
+                        .replace(/\/+$/, '')
+                     , '');
             } catch (error) {
-               console.log('Unexpected fullUrl:', fullUrl);
+               console.log('Unexpected fullUrl:', fullUrl, '->', error);
             }
          }
+         console.log('fullUrl:', fullUrl);
+         console.log('requestOptions:', beautify(JSON.stringify(requestOptions)));
+         console.log('this.remoteFile:', this.remoteFile);
          response = null;
          result = null;
          data = null;
          responseType = null;
-         response = await axios.head(fullUrl, requestOptions);
-         contentType = response.headers['content-type'];
-         contentLength = response.headers['content-length'];
-         transferEncoding = response.headers['transfer-encoding'];
-         console.log('contentType:', contentType, 'contentLength:', contentLength, 'transferEncoding:', transferEncoding);
-         if (`${transferEncoding}`.toLowerCase() === 'chunked') {
+         try {
             requestOptions.responseType = 'stream';
+            console.log('(downloadFile) calling: await axios.get(fullUrl, requestOptions)');
             response = await axios.get(fullUrl, requestOptions);
-            contentType = response.headers['content-type'];
-            contentLength = response.headers['content-length'];
-            // responseType = 'arraybuffer';
-            data = await new Promise((resolve, reject) => {
-               let chunks = '';
-               response.data.on('data', (chunk) => {
-                  chunks += chunk;
+            console.log('(downloadFile) await axios.get(fullUrl, requestOptions) returned response:', response);
+            contentType = response?.headers['content-type'];
+            contentLength = response?.headers['content-length'];
+            if (response?.data){
+               data = await new Promise((resolve, reject) => {
+                  const chunks = [];
+                  let n_chunks = 0;
+                  response.data.on('data', chunk => {
+                     chunks.push(chunk);
+                     n_chunks++;
+                  });
+                  response.data.on('end', () => {
+                     console.log(`Received ${n_chunks} chunks, length: ${Buffer.concat(chunks).length}.`);
+                     resolve(Buffer.concat(chunks));
+                  });
+                  response.data.on('error', error => {
+                     reject(error);
+                  });
                });
-   
-               response.data.on('end', () => {
-                  resolve(chunks);
-               });
-   
-               response.data.on('error', (error) => {
-                  reject(error);
-               });
-            });
+               // Create an MD5 hash
+               const hash = crypto.createHash('md5');
+               // Update the hash with the buffer data
+               hash.update(data);
+               // Generate the checksum
+               const md5sum = hash.digest('hex');
+               console.log(`MD5 Checksum: ${md5sum}`);
+               if (expectedMd5sum) {
+                  if (expectedMd5sum !== md5sum) {
+                     debugger;
+                     console.warn(`MD5 Checksum DOES NOT MATCH expected md5sum ❌: ${expectedMd5sum} !!!`);
+                  } else {
+                     console.log(`MD5 Checksum does match expected md5sum ✅ : ${expectedMd5sum}`)
+                  }
+               }
+            }
             if (data) response.data = data;
+         } catch(error) {
+            debugger;
+            console.log(error);
          }
          transferEncoding = response.headers['transfer-encoding'];
          console.log('contentType:', contentType, 'contentLength:', contentLength, 'transferEncoding:', transferEncoding);
@@ -603,9 +596,6 @@ class RestApi {
                responseType = 'arraybuffer';
             }
          }
-         // if (responseType) {
-         //    response = await axios.get(fullUrl, {...requestOptions, responseType});
-         // }
          if (response.status != 200) {
             if (contentType.match(/\bjson\b/)) {
                data = response.data;
@@ -664,6 +654,9 @@ class RestApi {
          if (! Array.isArray(this.fileVersions)) this.fileVersions = [];
          this.fileVersions.push(null);
       }
+      console.log('this.remoteFile =', this.remoteFile);      
+      console.log('this.fileContents.length =', this.fileContents.length);      
+      console.log('\nDone === downloadFile ===');
    };
 
 
@@ -677,6 +670,7 @@ class RestApi {
          try {
             fileStat = await vscode.workspace.fs.stat(param);           
          } catch (error) {
+            fileStat = error;
             fileStat = null;
          }
       } 
@@ -967,8 +961,10 @@ class RestApi {
 
 
    async getRemoteFileVersions(param) {
+      console.log('\n=== getRemoteFileVersions ===');
+      // debugger ;
       if (typeof param === 'string') {
-         param = vscode.Uri.file(param);
+         param = vscode.Uri.parse(param);
       }
       if (param instanceof vscode.Uri) {
          this.localFile = param;
@@ -995,7 +991,7 @@ class RestApi {
          console.log('fullUrl:', fullUrl);
          let response;
          try {
-            response = await axios.head(fullUrl, requestOptions);
+            response = await axios.get(fullUrl, requestOptions);
          } catch(error) {
             debugger;
             console.log(error);
@@ -1081,6 +1077,8 @@ class RestApi {
          vscode.window.showErrorMessage("Error fetching Remote File Versions:", error.message);
          this.fileVersions = null;
       }
+      
+      console.log('Done === getRemoteFileVersions ===\n');
    };
 
    async saveFileContentsAs(outFile, overwrite = null) {
@@ -1135,7 +1133,7 @@ class RestApi {
                outFileExists = true;
                console.log(`outFile exists: ${outFile}`);
             } catch (error) {
-               console.log(`outFile does not exist: ${outFile}`);
+               console.log(`outFile does not exist: ${outFile}, Error:`, error);
             }
             if (outFileExists) {
                if (overwrite == null) {
@@ -1166,6 +1164,7 @@ class RestApi {
       }
    }
 
+   // eslint-disable-next-line require-await
    async parseXmlString(xmlString) {
       const parser = new xml2js.Parser();
       // Use Promise to handle async parsing
@@ -1255,7 +1254,7 @@ class RestApi {
          if (jobParams) {
             const editable = true;
             newParams = await getObjectView(editableParams, editable, "Enter Job Parameters", "Job Parameters");
-            newParams = Object.entries(newParams).map(([a, b]) => b)
+            newParams = Object.entries(newParams).map(([a, b]) => [b, a][0])
                .map(item => Object.entries(item).reduce((acc, [k,v]) => {acc[k.split(/[\[\]]/)[1]]= v; return acc}, {}))
                .reduce((acc, obj)=> ({...acc, ...obj}), {});
          }
@@ -1279,6 +1278,9 @@ class RestApi {
 
    // viewFileContents
    async viewFileContents(){
+      console.log('\n=== viewFileContents ===');
+      console.log('this.fileContents.length:', this.fileContents.length);
+      // debugger ;
       // Write the remote file to a local temporary file
       // const extension = path.extname(this.remoteFile || this.localFile||'.');
       try {
@@ -1317,16 +1319,60 @@ class RestApi {
 
          if (Buffer.isBuffer(this.fileContents[0]) || /^application\/x-sas-xport(;|$)/.test(this.fileContentType)) {
             const tempFile = tmp.fileSync({ postfix: ext, discardDescriptor: true });
-            await fs.promises.writeFile(tempFile.name, this.fileContents[0]);
+            const tempFileUri = vscode.Uri.file(tempFile.name);
+            let uint8Array;
+            try {
+               if (Buffer.isBuffer(this.fileContents[0])){
+                  // Convert Buffer to Uint8Array
+                  uint8Array = new Uint8Array(this.fileContents[0]);
+                  // Write the Uint8Array to the file
+                  await vscode.workspace.fs.writeFile(tempFileUri, uint8Array);
+                  console.log('File written successfully:', tempFileUri);
+               } else if (typeof this.fileContents[0] === 'string') {
+                  // Convert the string content to a Uint8Array which is required by the vscode.workspace.fs.writeFile() method.
+                  uint8Array = new TextEncoder().encode(this.fileContents[0]);
+                  await vscode.workspace.fs.writeFile(tempFileUri, uint8Array);  
+                  // await fs.promises.writeFile(tempFile.name, this.fileContents[0]);
+               } else {
+                  debugger ;
+                  console.log("(viewFileContents) Unexpected case")
+                  await fs.promises.writeFile(tempFile.name, this.fileContents[0]);
+               }
+            } catch (error) {
+               console.log(`Failed to write file ${tempFile.name}: ${error.message}`);
+               debugger;
+               vscode.window.showErrorMessage(`Failed to write file: ${error.message}`);
+            }
+            // Set the file to read-only (cross-platform)
+            try {
+               await fs.promises.chmod(tempFile.name, 0o444);
+               console.log(`File is now read-only: ${tempFile.name}`);
+            } catch (err) {
+               console.error(`Failed to set file as read-only: ${err}`);
+            }
             if (/^application\/x-sas-data(;|$)/.test(this.fileContentType)) {
-               const data = await read_sas(tempFile.name);
-               console.log(beautify(JSON.stringify(data)));
+               let data;
+               console.log(`(viewFileContents) calling await read_sas(${tempFile.name})...`);
+               try {
+                  data = await read_sas(tempFile.name);
+               } catch (error) {
+                  debugger;
+                  console.log(error);
+               }
+               console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
                showTableView(`Imported SAS data from ${confLabel} remote file: ${this.remoteFile}`, data);
                showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from ${confLabel} remote file: ${this.remoteFile}`);
             }
             if (/^application\/x-sas-xport(;|$)/.test(this.fileContentType)) {
-               const data = await read_xpt(tempFile.name);
-               console.log(beautify(JSON.stringify(data)));
+               let data;
+               console.log(`(viewFileContents) calling await read_xpt(${tempFile.name})...`);
+               try {
+                  data = await read_xpt(tempFile.name);
+               } catch (error) {
+                  debugger;
+                  console.log(error);
+               }
+               console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
                showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data);
                showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from ${confLabel} remote file: ${this.remoteFile}`);
             }
@@ -1351,6 +1397,7 @@ class RestApi {
          console.error(`Error: ${err.message}`);
          vscode.window.showErrorMessage(`Error: ${err.message}`)
       }
+      console.log('Done === viewFileContents ===\n');
    }
 
    async compareFileContents() {
@@ -1461,6 +1508,7 @@ class RestApi {
       }
    }
 
+   // eslint-disable-next-line require-await
    async getEditorContents() {
       // Get the active text editor
       const editor = vscode.window.activeTextEditor;
@@ -1539,7 +1587,7 @@ class RestApi {
          bufferStream.push(null);    // Signal end of the stream
 
          // filename = this.localFile;
-         filename = ((filePath.path || this.localFile.path) ?? 'editorContents.txt')?.split(/[\\\/]/).slice(-1)[0];
+         filename = ((filePath.path || this.localFile.path) ?? 'editorContents.txt')?.split(/[\\/]/).slice(-1)[0];
          console.log('filename:', filename);
 
          // Append the file-like content to the FormData object with the key 'uploadFile'
@@ -1547,7 +1595,7 @@ class RestApi {
          // formdata.append('uploadFile', new Blob([this.fileContents]), filename);    // fails because Blob is not a stream
          console.log('formdata:', formdata);
       } else {
-         filename = filePath.path.split(/[\\\/]/).slice(-1)[0];
+         filename = filePath.path.split(/[\\/]/).slice(-1)[0];
          console.log('filename:', filename);
          /*
          const data = await fs.promises.readFile(this.localFile);
@@ -1600,10 +1648,10 @@ class RestApi {
       //       workingWSFolder.uri.fsPath.replace(/\\/g, "/") + this.config.localRootPath,
       //       ""
       //    );
-      const remoteFile = (this.localFile.path ? this.localFile.path : `${this.localFile}`)
+      const remoteFile = (this.localFile.fsPath || this.localFile.path || `${this.localFile}`)
          .replace(/\\/g, "/")
          .replace(
-            path.posix.join(workingWSFolder?.uri.fsPath.replace(/\\/g, "/"),
+            path.posix.join((workingWSFolder?.uri.fsPath || workingWSFolder?.uri.path || '').replace(/\\/g, "/"),
             this.config.localRootPath.path ?
                this.config.localRootPath.path.replace(/\\/g, "/") :
                `${this.config.localRootPath}`.replace(/\\/g, "/")),
@@ -1640,11 +1688,11 @@ class RestApi {
             .replace(/\/$/, '')
             ;
          console.log('urlPath:', urlPath)
-         const filePath = `${this.remoteFile}`.replace(/[\/\\]+$/, '');  // remove any trailing (back)slash(es)
+         const filePath = `${this.remoteFile}`.replace(/[/\\]+$/, '');  // remove any trailing (back)slash(es)
          console.log('filePath:', filePath);
          let apiRequest = `${path.posix.join(urlPath, filePath)}?action=uploadandexpand&createParents=true&overwrite=true`;
          // await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
-         await this.enterMultiLineComment(comment || `Add / Update ${(this.localFile?.split(/[\\\/]/) ?? '...').slice(-1)}\n\n`);
+         await this.enterMultiLineComment(comment || `Add / Update ${(this.localFile?.split(/[\\/]/) ?? '...').slice(-1)}\n\n`);
          if (this.comment) {
             apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
          }
@@ -1658,7 +1706,7 @@ class RestApi {
             headers: {
                ...formdata.getHeaders(),
                "X-Auth-Token": this.authToken
-           },
+            },
            maxRedirects: 0 // Handle redirection manually
          };
          // console.log(JSON.stringify(requestOptions));
@@ -1681,7 +1729,7 @@ class RestApi {
                      headers: {
                         ...formdata.getHeaders(),
                         "X-Auth-Token": this.authToken
-                    },
+                     },
                     maxRedirects: 0 // Handle redirection manually
                   };
                   // Perform the PUT request again at the new location
@@ -1803,7 +1851,7 @@ class RestApi {
       console.log('filePath:', filePath);
       let apiRequest = `${path.posix.join(urlPath, filePath)}?action=upload&version=MINOR&createParents=true&overwrite=true`;
       // await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
-      await this.enterMultiLineComment(`Add / Update ${((this.localFile.path || this.localFile).toString().split(/[\\\/]/) || '...').slice(-1)}\n\n`);
+      await this.enterMultiLineComment(`Add / Update ${((this.localFile.path || this.localFile).toString().split(/[\\/]/) || '...').slice(-1)}\n\n`);
       if (this.comment) {
          apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
          // apiRequest = `${apiRequest}&comment=${this.comment}`;
@@ -1912,7 +1960,7 @@ class RestApi {
          console.error(`Error uploading file "${filename}":`, error);
          this.fileContents = null;
       }
-   };
+   }
 
    
    async submitJob(argJob, argVersion, argParams) {
@@ -2115,7 +2163,7 @@ class RestApi {
             }
          }
       }, 3000)
-   };
+   }
 
    removeNulls(obj) {
       for (const key in obj) {
