@@ -2,6 +2,7 @@ const vscode = require("vscode");
 const os = require('os');
 
 // This is the async function that opens a webview and displays an object / collects edits from the user
+// eslint-disable-next-line require-await
 async function getObjectView(
    inputObject = {},
    editable = false,
@@ -27,6 +28,7 @@ async function getObjectView(
       panel.webview.onDidReceiveMessage(
          message => {
             let updatedObject;
+            let url, newRestApi;
             switch (message.command) {
                case 'submit':
                      updatedObject = undefined;
@@ -59,13 +61,11 @@ async function getObjectView(
                   panel.dispose(); // Close the webview panel
                break;
                case('openLink'):
-                  debugger;
-                  let url;
-                  let newRestApi;
+                  debugger ;
                   try {
                      url = new URL(message.url);
                      console.log('openLink:', url.href);
-                     debugger;
+                     debugger ;
                      if (restApi && typeof restApi.constructor === 'function' && restApi.logon && restApi.getRemoteFileContents && restApi.viewFileContents) {
                         let host = url.hostname;
                         if (! /^\w+(-\w+)?\.ondemand\.sas\.com$/.test(host)) {
@@ -82,9 +82,10 @@ async function getObjectView(
                            maxRedirects: 5 // Optional, axios follows redirects by default
                         };
                         newRestApi.downloadFile(url, requestOptions).then(p => {
-                           debugger;
+                           debugger ;
                            console.log('newRestApi.downloadFile() returned:', p); 
                            newRestApi.viewFileContents();
+                           return;
                         }
                         ).catch(err => {
                            console.log(err);
@@ -118,7 +119,8 @@ function alignValue(value) {
    try{
       value = Number(value);
       return value ? ' text-align : right;' : '';
-   } catch (_){
+   } catch (err){
+      console.log('(alignValue) value=', value, ' -> Error:', err);
       return '';
    }
 }
@@ -128,7 +130,8 @@ function showValue(value) {
    try {
       const urlValue = new URL(value);
       return `<a href="${urlValue.href}">${valueStr}</a>`;
-   } catch (_) {
+   } catch (err) {
+      console.log('(showValue) value:', value, '-> Error:', err);
       return valueStr;
    }
 }
