@@ -157,7 +157,7 @@ async function localFolderContents(param) {
 console.log('typeof localFolderContents:', typeof localFolderContents);
 
 
-
+// eslint-disable-next-line require-await
 async function showFolderView(folderPath, folderContents, isLocal, config) {
    console.log('(showFolderView) folderPath:', folderPath);
    console.log('(showFolderView) isLocal:', isLocal)
@@ -186,7 +186,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
          // debugger ;
          console.log('(showFolderView) message:', message);
          if (typeof message.filePath === 'string') {
-            message.filePath = message.filePath.replace(/[\/\\]$/, '');  // remove trailing (back)slash(es)
+            message.filePath = message.filePath.replace(/[/\\]$/, '');  // remove trailing (back)slash(es)
          }
          const fileUri = vscode.Uri.file(message.filePath);
          const ext = path.extname(message.filePath).toLowerCase();
@@ -202,7 +202,11 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                      // );
                      const localPath = vscode.Uri.joinPath(config.workspaceFolder?.uri || vscode.Uri.parse(config.workspaceFolder),
                         config?.localRootPath?.path || config?.localRootPath,
-                        `|${message.filePath}`.replace(`|${remotePathPrefix}`, '').replace('|', '')
+                        `|${message.filePath}`
+                           .replace(`|${remotePathPrefix}`, '')
+                           .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
+                           .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
+                           .replace('|', '')
                      );
                      console.log('(showFolderView) localPath:', localPath);
                      let localPathExists = false;
@@ -215,7 +219,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                         localPathExists = true;
                         console.log(`localPath exists: ${localPath}`);
                      } catch (error) {
-                        console.log(`localPath does not exist: ${localPath}`);
+                        console.log(`localPath does not exist: ${localPath},`, error);
                      } 
                      const actions = ['View', 'Download as Zip file'];
                      if (localPathExists) {
@@ -277,6 +281,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                   break;
 
                case "openFile":
+                  // debugger ;
                   if (config?.remoteEndpoint?.url && config?.workspaceFolder) { // Remote folder
                      const remotePathPrefix = new URL(config.remoteEndpoint.url).pathname.replace(/\/lsaf\/webdav\/(work|repo)(?=\/)/, '').replace(/\/$/, '');
                      // const localPath = path.join(config.workspaceFolder?.uri?.path || config.workspaceFolder,
@@ -285,7 +290,11 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                      // );
                      const localPath = vscode.Uri.joinPath(config.workspaceFolder?.uri || vscode.Uri.parse(config.workspaceFolder),
                         config?.localRootPath?.path || config?.localRootPath,
-                        `|${message.filePath}`.replace(`|${remotePathPrefix}`, '').replace('|', '')
+                        `|${message.filePath}`
+                           .replace(`|${remotePathPrefix}`, '')
+                           .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
+                           .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
+                           .replace('|', '')
                      );
                      let localPathExists = false;
                      try {
@@ -297,7 +306,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                         localPathExists = true;
                         console.log(`localPath exists: ${localPath}`);
                      } catch (error) {
-                        console.log(`localPath does not exist: ${localPath}`);
+                        console.log(`localPath does not exist: ${localPath},`, error);
                      } 
                      const actions = ['View'];
                      if (localPathExists) {
@@ -322,7 +331,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                      } else if (action.split(' ')[0] === 'Download') {
                         return restApiDownload(localPath, config, /overwrite/i.test(action));
                      } else if (action === 'View') {
-                        return restApiView(localPath, config);
+                        return restApiView(localPath, config, message?.fileMd5sum);  // View Remote Folder
                      } else {
                         const msg = `(showFolderView) Action not yet implemented: ${action} for ${config?.label} remote file: ${message.filePath}`;
                         console.log(msg);
@@ -331,7 +340,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                   } else {  // Local file
                      // const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(fPath));
                      const fileStat = await vscode.workspace.fs.stat(fileUri);
-                     let itemType;
+                     let itemType, isBinary;
                      if (fileStat.type === vscode.FileType.File) {
                         // Ask what to do with local file: Open, Upload, Compare to Remote ?
                         const action = await vscode.window.showQuickPick(['Open', 'Upload', 'Compare to Remote'],
@@ -380,7 +389,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                                  showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
                                  break;
                               default:
-                                 const isBinary = await isBinaryFile(message.filePath);
+                                 isBinary = await isBinaryFile(message.filePath);
                                  if (! isBinary) {
                                     // Open the local file in the editor
                                     const document = await vscode.workspace.openTextDocument(fileUri);
@@ -439,7 +448,11 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                         //    );
                         let localPath = vscode.Uri.joinPath(config.workspaceFolder?.uri || vscode.Uri.parse(config.workspaceFolder),
                            config?.localRootPath?.path || config?.localRootPath,
-                           `|${message.filePath}`.replace(`|${path.posix.normalize(remotePathPrefix)}`, '').replace('|', '')
+                           `|${message.filePath}`
+                              .replace(`|${path.posix.normalize(remotePathPrefix)}`, '')
+                              .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
+                              .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
+                              .replace('|', '')
                            );
                         restApi.localFile = localPath;
                         restApi.getRemoteFilePath();   // remove remotePathPrefix from restApi.remoteFile
@@ -553,7 +566,7 @@ function getOneFolderWebviewContent(folderPath, isLocal, files, config) {
                .map(
                   (file) => `
                   <tr>
-                     <td><a href="#" class="${/\/$/.test(file.name) ? 'folder-link' : 'file-link'}" data-path="${file.path}">${file.name}</a></td>
+                     <td><a href="#" class="${/\/$/.test(file.name) ? 'folder-link' : 'file-link'}" data-path="${file.path}|${file.md5sum}">${file.name}</a></td>
                      <td>${file.size}</td>
                      <td>${file.mtime}</td>
                      <td>${file.md5sum}</td>
@@ -570,10 +583,11 @@ function getOneFolderWebviewContent(folderPath, isLocal, files, config) {
             document.querySelectorAll('.file-link').forEach(link => {
                link.addEventListener('click', event => {
                event.preventDefault();
-               const filePath = event.target.getAttribute('data-path');
+               const [filePath, fileMd5sum] = event.target.getAttribute('data-path').split('|');
                vscode.postMessage({
                   command: 'openFile',
-                  filePath: filePath
+                  filePath: filePath,
+                  fileMd5sum: fileMd5sum
                });
                });
             });
@@ -840,7 +854,7 @@ async function compareFolderContents(param, config = null) {
 console.log('typeof compareFolderContents:', typeof compareFolderContents);
 
 
-
+// eslint-disable-next-line require-await
 async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, folder1Config, folder2Path, isFolder2Local, folder2Config) {
 
    const panel = vscode.window.createWebviewPanel(
@@ -863,11 +877,14 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
    // Handle messages from the Webview
    panel.webview.onDidReceiveMessage(
       async (message) => {
+         let folder1Contents, folder2Contents, isBinary;
+         console.log(`(showTwoFoldersView) message: ${beautify(JSON.stringify(message))}`);
          // debugger ;
-         let fileUri, ext, config, isLocal, isFolder;
+         let fileUri, ext, config, isLocal, isFolder, restApi;
+         let folder1Names, folder2Names, uniqueNames, bothFoldersContents, folder1index, folder2index;
          if (message?.filePath) {
             if (typeof message.filePath === 'string') {
-               message.filePath = message.filePath.replace(/[\/\\]$/, '');  // remove trailing (back)slash(es)
+               message.filePath = message.filePath.replace(/[/\\]$/, '');  // remove trailing (back)slash(es)
             }
             fileUri = vscode.Uri.file(message?.filePath);
             ext = path.extname(message?.filePath).toLowerCase();
@@ -910,8 +927,7 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                   }
                   break;
                case("refresh"):
-                  const restApi = new RestApi();
-                  let folder1Contents, folder2Contents;
+                  restApi = new RestApi();
                   if (isFolder1Local) {
                      await restApi.getLocalFolderContents(folder1Path);
                      folder1Contents = await Promise.all(restApi.localFolderContents.map(async file => {
@@ -964,7 +980,11 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                      //    );
                      let localPath = vscode.Uri.joinPath(restApi.config.workspaceFolder?.uri || vscode.Uri.parse(restApi.config.workspaceFolder),
                      restApi.config?.localRootPath?.path || restApi.config?.localRootPath,
-                        `|${folder2Path}`.replace(`|${path.posix.normalize(remotePathPrefix)}`, '').replace('|', '')
+                        `|${folder2Path}`
+                           .replace(`|${path.posix.normalize(remotePathPrefix)}`, '')
+                           .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
+                           .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
+                           .replace('|', '')
                         );
                      restApi.localFile = localPath;
                      restApi.getRemoteFilePath();    // remove remotePathPrefix from restApi.remoteFile  
@@ -981,13 +1001,13 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                         });
                      });
                   }
-                  const folder1Names = new Set([...(folder1Contents.map(folder => folder.name))]);
-                  const folder2Names = new Set([...(folder2Contents.map(folder => folder.name))]);
-                  const uniqueNames = new Set([...folder1Names, ...folder2Names]);
-                  const bothFoldersContents = [];
+                  folder1Names = new Set([...(folder1Contents.map(folder => folder.name))]);
+                  folder2Names = new Set([...(folder2Contents.map(folder => folder.name))]);
+                  uniqueNames = new Set([...folder1Names, ...folder2Names]);
+                  bothFoldersContents = [];
                   uniqueNames.forEach(name => {
-                     const folder1index = folder1Contents.findIndex(file => file.name === name);
-                     const folder2index = folder2Contents.findIndex(file => file.name === name);
+                     folder1index = folder1Contents.findIndex(file => file.name === name);
+                     folder2index = folder2Contents.findIndex(file => file.name === name);
                      bothFoldersContents.push(
                         {
                            name,
@@ -1011,6 +1031,7 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
             default:
                break;
          }
+         console.log(`(showTwoFoldersView) isLocal: ${isLocal}, isFolder: ${isFolder}, message?.command: ${message?.command}`);
          if (isLocal) { // local folder
             try {
                if (isFolder) {
@@ -1082,7 +1103,7 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                            showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
                            break;
                         default:
-                           const isBinary = await isBinaryFile(message.filePath);
+                           isBinary = await isBinaryFile(message.filePath);
                            if (! isBinary) {
                               // Open the local file in the editor
                               const document = await vscode.workspace.openTextDocument(fileUri);
@@ -1122,8 +1143,12 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
             // }
             localPath = vscode.Uri.joinPath(config.workspaceFolder?.uri || vscode.Uri.parse(config.workspaceFolder),
                            config?.localRootPath?.path || config?.localRootPath,
-                           `|${message.filePath}`.replace(`|${path.posix.normalize(remotePathPrefix)}`, '').replace('|', '')
+                           `|${message.filePath}`
+                              .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
+                              .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
+                              .replace('|', '')
                            );
+            console.log('(showTwoFoldersView) localPath:', localPath);
             let localPathExists = false;
             try {
                if (localPath instanceof vscode.Uri){
@@ -1134,7 +1159,7 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                localPathExists = true;
                console.log(`localPath exists: ${localPath}`);
             } catch (error) {
-               console.log(`localPath does not exist: ${localPath}`);
+               console.log(`localPath does not exist: ${localPath},`, error);
             } 
             const actions = [];
             if (localPathExists) {
@@ -1173,13 +1198,13 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                               restApiFolderContents(vscode.Uri.file(localPath), null, config);
                            }
                         } else {
-                           const msg = `Action not yet implemented: ${action} for ${message?.config?.label} remote file: ${message.filePath}`;
+                           const msg = `(showTwoFoldersView) Action not yet implemented: ${action} for ${message?.config?.label} remote file: ${message.filePath}`;
                            console.log(msg);
                            vscode.window.showWarningMessage(msg);
                         }
                } else {  // remote file
 
-                     fileUri = vscode.Uri.file(message.filePath);
+                     // fileUri = vscode.Uri.file(message.filePath);
                      ext = path.extname(message.filePath).toLowerCase();
                      if (message?.config?.remoteEndpoint?.url) {
                         // Ask what to do with remote file: download, compare to local, delete ?
@@ -1194,13 +1219,16 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                         if (action == null) {  // cancelled
                            return;
                         } else if (action === 'Compare to Local') {
+                           console.log(`(showTwoFoldersView) Calling restApiCompare(localPath=${localPath}, config=${beautify(JSON.stringify(config))})`);
                            return restApiCompare(localPath, config);
                         } else if (action.split(' ')[0] === 'Download') {
+                           console.log(`(showTwoFoldersView) Calling restApiDownload(localPath=${localPath}, config=${beautify(JSON.stringify(config))}, overwrite=${/overwrite/i.test(action)})`);
                            return restApiDownload(localPath, config, /overwrite/i.test(action));
                         } else if (action === 'View') {
-                           return restApiView(localPath, config);
+                           console.log(`(showTwoFoldersView) Calling restApiView(localPath=${localPath}, config=${beautify(JSON.stringify(config))})`);
+                           return restApiView(localPath, config, message?.fileMd5sum);  // View remote file
                         } else {
-                           const msg = `Action not yet implemented: ${action} for ${message?.config?.label} remote file: ${message.filePath}`;
+                           const msg = `(showTwoFoldersView) Action not yet implemented: ${action} for ${message?.config?.label} remote file: ${message.filePath}`;
                            console.log(msg);
                            vscode.window.showWarningMessage(msg);
                         }
@@ -1338,12 +1366,12 @@ function getTwoFoldersWebviewContent(bothFoldersContents, folder1Path, isFolder1
                .map(
                   (file) => `
                   <tr>
-                     <td><a href="#" class="${/\/$/.test(file.name1) ? 'folder-' : 'file-'}${class1link}" data-path="${path.join(folder1Path, file.name1)}">${file.name1}</a></td>
+                     <td><a href="#" class="${/\/$/.test(file.name1) ? 'folder-' : 'file-'}${class1link}" data-path="${path.join(folder1Path, file.name1)}|${file.md5sum1}">${file.name1}</a></td>
                      <td${file.size1  !== file.size2  ? ' class="'+(file.size1  > file.size2  ? 'higher' : 'lower')+'"' : ''}>${file.size1}</td>
                      <td${file.mtime1 !== file.mtime2 ? ' class="'+(file.mtime1 > file.mtime2 ? 'higher' : 'lower')+'"' : ''}>${file.mtime1}</td>
                      <td${file.md5sum1 !== file.md5sum2 ? ' class="differ"' : ''}>${file.md5sum1}</td>
                      <td class="spacer"> </td> <!-- Spacer column between the two sections -->
-                     <td><a href="#" class="${/\/$/.test(file.name2) ? 'folder-' : 'file-'}${class2link}" data-path="${path.join(folder2Path, file.name2)}">${file.name2}</a></td>
+                     <td><a href="#" class="${/\/$/.test(file.name2) ? 'folder-' : 'file-'}${class2link}" data-path="${path.join(folder2Path, file.name2)}|${file.md5sum2}">${file.name2}</a></td>
                      <td${file.size1  !== file.size2  ? ' class="'+(file.size1  < file.size2  ? 'higher' : 'lower')+'"' : ''}>${file.size2}</td>
                      <td${file.mtime1 !== file.mtime2 ? ' class="'+(file.mtime1 < file.mtime2 ? 'higher' : 'lower')+'"' : ''}>${file.mtime2}</td>
                      <td${file.md5sum1 !== file.md5sum2 ? ' class="differ"' : ''}>${file.md5sum2}</td>
@@ -1360,11 +1388,12 @@ function getTwoFoldersWebviewContent(bothFoldersContents, folder1Path, isFolder1
             document.querySelectorAll('.file-${class1link}').forEach(link => {
                link.addEventListener('click', event => {
                event.preventDefault();
-               const filePath = event.target.getAttribute('data-path');
+               const [filePath, fileMd5sum] = event.target.getAttribute('data-path').split('|');
                msg = {
                   command: 'openFolder1File',
                   filePath: filePath,
-                  config: ${JSON.stringify(folder1Config)}
+                  config: ${JSON.stringify(folder1Config)},
+                  fileMd5sum: fileMd5sum
                };
                console.log('vscode.postMessage:', JSON.stringify(msg));
                vscode.postMessage(msg);
@@ -1388,11 +1417,12 @@ function getTwoFoldersWebviewContent(bothFoldersContents, folder1Path, isFolder1
             document.querySelectorAll('.file-${class2link}').forEach(link => {
                link.addEventListener('click', event => {
                event.preventDefault();
-               const filePath = event.target.getAttribute('data-path');
+               const [filePath, fileMd5sum] = event.target.getAttribute('data-path').split('|');
                msg = {
                   command: 'openFolder2File',
                   filePath: filePath,
-                  config: ${JSON.stringify(folder2Config)}
+                  config: ${JSON.stringify(folder2Config)},
+                  fileMd5sum: fileMd5sum
                };
                console.log('vscode.postMessage:', JSON.stringify(msg));
                vscode.postMessage(msg);
