@@ -207,6 +207,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                            .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
                            .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
                            .replace('|', '')
+                           .replace(/[\\/]$/, '')
                      );
                      console.log('(showFolderView) localPath:', localPath);
                      let localPathExists = false;
@@ -219,7 +220,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                         localPathExists = true;
                         console.log(`localPath exists: ${localPath}`);
                      } catch (error) {
-                        console.log(`localPath does not exist: ${localPath},`, error);
+                        console.log(`localPath does not exist: ${localPath},`, error?.code);
                      } 
                      const actions = ['View', 'Download as Zip file'];
                      if (localPathExists) {
@@ -1147,6 +1148,7 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                               .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
                               .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
                               .replace('|', '')
+                              .replace(/[\\/]$/, '')
                            );
             console.log('(showTwoFoldersView) localPath:', localPath);
             let localPathExists = false;
