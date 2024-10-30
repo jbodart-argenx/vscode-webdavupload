@@ -304,7 +304,11 @@ console.log('typeof restApiDownload:', typeof restApiDownload);
 
 // restApiView
 
-async function restApiView(param, config = null) {
+async function restApiView(param, config = null, expectedMd5sum = null) {
+   console.log('\n=== restApiView ===');
+   console.log('(restApiView) param:', param);
+   console.log('(restApiView) config:', config);
+   console.log('(restApiView) expectedMd5sum:', expectedMd5sum);
    const restApi = new RestApi();
    if (typeof param === 'string') {
       param = vscode.Uri.file(param);
@@ -314,9 +318,11 @@ async function restApiView(param, config = null) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
             console.log('(restApiView) param:', param);
-            restApi.localFile = param.fsPath;
+            restApi.localFile = param;
+            console.log('(restApiView) restApi.localFile:', restApi.localFile);
             // restApi.localFileStat = await vscode.workspace.fs.stat(param);
             restApi.getRemoteFilePath();   // get Remote File Path
+            console.log('(restApiView) restApi.remoteFile:', restApi.remoteFile);
          }
       } else {
          await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
@@ -325,12 +331,20 @@ async function restApiView(param, config = null) {
          if (!restApi.config) {
             return;
          }
+         console.log('(restApiView) restApi.localFile:', restApi.localFile);
+         console.log('(restApiView) restApi.remoteFile:', restApi.remoteFile);
       }
-      await restApi.getRemoteFileContents();
+      // param: any, pick_multiple?: boolean, expectedMd5sum?: null
+      // await restApi.getRemoteFileContents();
+      await restApi.getRemoteFileContents(undefined, false, expectedMd5sum);
+      console.log('restApi.fileContents?.length:', restApi.fileContents?.length);
       await restApi.viewFileContents();
    } catch (err) {
+      debugger;
       console.log(err);
    }
+   // debugger ;
+   console.log('Done === restApiView ===\n');
 }
 console.log('typeof restApiView:', typeof restApiView);
 
@@ -398,7 +412,7 @@ async function restApiVersions(param) {
       if (!restApi.config) {
          return;
       }
-      await restApi.getRemoteFileVersions();
+      await restApi.getRemoteFileVersions(param);
       let versions = restApi.fileVersions;
       if (typeof versions === 'object') {
          versions = beautify(JSON.stringify(versions), {
