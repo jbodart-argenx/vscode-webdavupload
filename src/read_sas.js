@@ -1,12 +1,62 @@
 const path = require('path');
 const { WebR } = require('webr');
+const fs = require('fs');
 
 let webR;
+let webrRepo;
 
-async function initWebR() {
+async function initWebR(webR, repo) {
+   webrRepo = repo;
    webR = new WebR();
    await webR.init();
-   await webR.installPackages(['haven', 'jsonlite'], {mount: true, quiet: false, repos: "https://repo.r-wasm.org/"});
+   await webR.FS.mkdir('/localrepo');
+   // await webR.FS.mount('NODEFS', {root:  "../../output/vfs"}, "/localrepo");
+   // webr::mount(
+   //    mountpoint = "/data",
+   //    source = "https://example.com/output.data"
+   //  )
+   // await webR.FS.mount('NODEFS', {root:  "/Users/jmbodart/output"}, "/localrepo");
+   // await webR.FS.mount('WORKERFS', {root:  "/Users/jmbodart/output"}, "/localrepo");
+   let data, metadata;
+   data = fs.readFileSync(path.join(webrRepo, 'output.data'));
+   metadata = JSON.parse(fs.readFileSync(path.join(webrRepo, 'output.js.metadata'), 'utf-8'));
+   await webR.FS.mount(
+      "WORKERFS", 
+      {
+         packages: [{
+            blob: data,
+            metadata: metadata,
+       }],
+      },
+      '/localrepo'
+   );
+   let res;
+   try{
+      res = await webR.evalR(`list.files("/localrepo", recursive = TRUE)`);
+      console.log('(list.files("/localrepo", recursive = TRUE)) res:', await res.toArray());
+      res = await webR.evalR('.libPaths(c(.libPaths(), "/localrepo"))');
+      console.log('(.libPaths) res:', await res.toArray());
+      res = await webR.evalR('library(haven)');
+      console.log('(library(haven)) res:', await res.toArray());
+      res = await webR.evalR('library(jsonlite)');
+      console.log('(library(jsonlite)) res:', await res.toArray());
+   } catch(err) {
+      console.log('(initWebR) error:', err);
+   }
+   // await webR.umount("/localrepo");
+   await webR.installPackages(['haven', 'jsonlite'], {repos: ['../../localrepo']});
+   // await webR.installPackages(['haven', 'jsonlite'], {
+   //    mount: false,
+   //    quiet: false,
+   //    repos: [
+   //       // "https://repo.r-wasm.org/",
+   //       // 'https://cardiomoon.r-universe.dev',
+   //       // 'https://cloud.r-project.org',
+   //       //'../../output/vfs/output.tar.gz',
+   //       //'../../localrepo/vfs/output.tar.gz',
+   //       '/localrepo'
+   //    ]
+   // });
    await webR.FS.mkdir('/data');
    return webR;
 }
