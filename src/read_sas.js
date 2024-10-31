@@ -3,6 +3,7 @@ const { WebR } = require('webr');
 const fs = require('fs');
 
 let webR;
+let webrRepo;
 
 async function initWebR(webrLibPath = path.join(__dirname, '..', 'webr-repo')) {
    webR = new WebR();
@@ -36,7 +37,7 @@ async function initWebR(webrLibPath = path.join(__dirname, '..', 'webr-repo')) {
 async function read_sas(sas7bdatFile, rows = 'TRUE', cols = 'TRUE'){
    // Identify directory with data
    let datadir = path.dirname(sas7bdatFile);
-   console.log('datadir:', datadir);
+   console.log('(read_sas) datadir:', datadir);
    // Mount directory with data
    await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
    // Read data and export as JSON

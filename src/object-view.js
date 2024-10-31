@@ -1,15 +1,13 @@
 const vscode = require("vscode");
 const os = require('os');
 
+const { authTokens } = require('./auth.js');
+const beautify = require('js-beautify');
+const { axios } = require("./axios-cookie-jar.js");
+const { showMultiLineText } = require("./multiLineText.js");
+
 // This is the async function that opens a webview and displays an object / collects edits from the user
-// eslint-disable-next-line require-await
-async function getObjectView(
-   inputObject = {},
-   editable = false,
-   title = "Object Viewer",
-   titleShort = "Object Viewer",
-   restApi = null
-) {
+async function getObjectView(inputObject = {}, editable = false, title = "Object Viewer", titleShort = "Object Viewer", context, restApi) {
    return new Promise((resolve, reject) => {
       // Create and show a new webview panel
       const panel = vscode.window.createWebviewPanel(
@@ -26,7 +24,7 @@ async function getObjectView(
 
       // Handle messages from the webview
       panel.webview.onDidReceiveMessage(
-         message => {
+         async message => {
             let updatedObject;
             let url, newRestApi;
             switch (message.command) {
@@ -60,41 +58,53 @@ async function getObjectView(
                   reject("Cancelled");
                   panel.dispose(); // Close the webview panel
                break;
-               case('openLink'):
-                  debugger ;
-                  try {
-                     url = new URL(message.url);
-                     console.log('openLink:', url.href);
-                     debugger ;
-                     if (restApi && typeof restApi.constructor === 'function' && restApi.logon && restApi.getRemoteFileContents && restApi.viewFileContents) {
-                        let host = url.hostname;
-                        if (! /^\w+(-\w+)?\.ondemand\.sas\.com$/.test(host)) {
-                           host = restApi.host;
-                        } 
-                        let username = restApi.username || os.userInfo().username;
-                        newRestApi = new restApi.constructor(username, host);
-                        newRestApi.authToken = restApi.authToken;
-                        newRestApi.logon();
-                        const requestOptions = {
-                           headers: {
-                              "X-Auth-Token": newRestApi.authToken
-                           },
-                           maxRedirects: 5 // Optional, axios follows redirects by default
-                        };
-                        newRestApi.downloadFile(url, requestOptions).then(p => {
-                           debugger ;
-                           console.log('newRestApi.downloadFile() returned:', p); 
-                           newRestApi.viewFileContents();
-                           return;
-                        }
-                        ).catch(err => {
-                           console.log(err);
-                        })
-                     }
-                  } catch (error) {
-                     console.log('(openLink) Error:', error);
+               case 'openUrl':
+                  // debugger ;
+                  console.log('(getObjectView) openUrl: message.url = ', message.url);
+                  let response;
+                  let headers = {};
+                  await restApi.logon();
+                  let authToken = authTokens[new URL(message.url).hostname];
+                  const basicAuth = (restApi.username && restApi.encryptedPassword) ?
+                     "Basic " + Buffer.from(restApi.username + ":" + restApi.encryptedPassword).toString('base64') :
+                     undefined;
+                  if (authToken) {
+                     headers["X-Auth-Token"] = authToken;
+                  } else {
+                     headers["Authorization"] =  basicAuth;
                   }
-               break;
+                  try {
+                     response = await axios.get(message.url,
+                        {
+                           headers: headers,
+                           maxRedirects: 5 // Optional, axios follows redirects by default
+                        });
+                        console.log('axios response status:', response.status, 'content-type:', response.headers['content-type']);
+                        if (response?.data) {
+                           showMultiLineText(
+                              typeof response.data === 'string' ?
+                                 response.data :
+                                 beautify(JSON.stringify(response.data)),
+                              `${message.url}`,  // title
+                              `${message.url}`,  // heading
+                              "Dismiss",         // buttonLabel
+                              true               // preserveWiteSpace
+                           );
+                        } else {
+                           console.log('axios response:\n', response);
+                        }
+                  } catch (error) {
+                     debugger;
+                     console.log('(getObjectView) openUrl error:', error.message);
+                  }
+                  // // Handle the URL, e.g., open it in a browser
+                  // try {
+                  //    vscode.env.openExternal(vscode.Uri.parse(message.url));
+                  // } catch (error) {
+                  //    debugger;
+                  //    console.log(error);
+                  // }
+                  break;
                default:
                   debugger;
                   console.log('(getObjectView) Rejecting Promise for unexpected message:', message);
@@ -208,6 +218,8 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                });
 
                document.body.addEventListener('click', function(event) {
+                  event.preventDefault();
+                  event.stopPropagation();
                   if (event.target.tagName === 'TH') {
                      const table = event.target.closest('table');
                      if (table) {
@@ -283,6 +295,22 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                   // Append the fragment to the table body
                   table.tBodies[0].appendChild(fragment);
                }
+
+               document.addEventListener('DOMContentLoaded', () => {
+                  document.querySelectorAll('a').forEach(link => {
+                     link.addEventListener('click', function(event) {
+                        event.preventDefault(); // Prevent default link behavior
+                        event.stopPropagation();
+                        const url = this.href; // Get the URL from the link
+                        msg = {
+                           command: 'openUrl',
+                           url: url
+                        };
+                        console.log('vscode.postMessage:', JSON.stringify(msg));
+                        vscode.postMessage(msg);
+                     });
+                  });
+               });
 
          </script>
       </body>

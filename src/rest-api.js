@@ -396,8 +396,9 @@ console.log('typeof restApiProperties:', typeof restApiProperties);
 
 
 // restApiSubmitJob
-async function restApiSubmitJob(param) {
+async function restApiSubmitJob(param, context) {
    const restApi = new RestApi();
+   restApi.context = context;
    try {
       const onlyRepo = false;
       await restApi.getEndPointConfig(param, onlyRepo);   // based on the passed Uri (if defined)
@@ -415,6 +416,47 @@ async function restApiSubmitJob(param) {
 }
 console.log('typeof restApiSubmitJob:', typeof restApiSubmitJob);
 
+
+// restApiViewManifest
+async function restApiViewManifest(param, context) {
+   const restApi = new RestApi();
+   restApi.context = context;
+   try {
+      const onlyRepo = false;
+      await restApi.getEndPointConfig(param, onlyRepo);   // based on the passed Uri (if defined)
+      // otherwise based on the path of the local file open in the active editor
+      // also sets remoteFile
+      if (!restApi.config) {
+         return;
+      }
+      let mnfData, xmlData;
+      debugger;
+      try {
+         if (param instanceof vscode.Uri) {
+            // The vscode.workspace.fs.readFile method returns a Uint8Array, so we need to convert it to a string before parsing it as JSON.
+            const Uint8Content = await vscode.workspace.fs.readFile(param);
+            xmlData = Buffer.from(Uint8Content).toString('utf8');
+         }
+         mnfData = await restApi.parseManifestXml(xmlData);         
+      } catch (error) {
+         debugger;
+         console.log(error);
+      } 
+      const editable = false;
+      if (mnfData){
+         try{
+            await getObjectView(mnfData, editable, "Job Submission Manifest", "Job Submission Manifest", this.context, restApi);
+         } catch(error) {
+            debugger;
+            console.log('(submitJob) Error in getObjectView():', error);
+         }
+      }
+      // console.log(mnfData);
+   } catch (err) {
+      console.log(err);
+   }
+}
+console.log('typeof restApiViewManifest:', typeof restApiViewManifest);
 
 
 // restApiVersions
@@ -459,5 +501,6 @@ module.exports = {
    restApiDownloadFolderAsZip,
    restApiCompare,
    restApiUpload,
-   restApiSubmitJob
+   restApiSubmitJob,
+   restApiViewManifest,
 };
