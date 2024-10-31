@@ -4,7 +4,7 @@ const path = require("path");
 const { getMultiLineText: getMultiLineInput } = require('./multiLineText.js');
 const { fileMD5sum, fileMD5sumStripBom } = require('./md5sum.js');
 const isBinaryFile = require("isbinaryfile").isBinaryFile;
-const { openFile } = require("./openFile");
+// const { openFile } = require("./openFile");
 
 const { URL } = require("url");
 const beautify = require("js-beautify");
@@ -265,7 +265,6 @@ class RestApi {
             console.log("authToken", authToken, "response", response);
             this.authToken = authToken;
             console.log(`Storing Auth Token for host ${this.host}: ${this.authToken}`);
-            // authTokens[this.host] = authToken;
             setAuthTokens(this.host, authToken)
             // Store the password only if there is no HTTP error and the credentials contain at least a user name
             await storeCredentials(
@@ -370,7 +369,6 @@ class RestApi {
             // const arrayBuffer = await response.arrayBuffer();
             try {
                const tempFile = tmp.fileSync({ postfix: '.zip', discardDescriptor: true });
-               // await fs.promises.writeFile(tempFile.name, Buffer.from(arrayBuffer));
                // Create a writable stream to save the file
                const fileStream = fs.createWriteStream(tempFile.name);
                if (pipeline){
@@ -434,7 +432,6 @@ class RestApi {
       const filePath = this.remoteFile;
       let selectedVersion = null;
       let selectedVersions = null;
-      // let compareVersion = null;
       if (/\/repository\/files\//.test(urlPath)) {
          await this.getRemoteFileVersions(param || this.localFile);
          let versions = this.fileVersions;
@@ -451,8 +448,6 @@ class RestApi {
                { canPickMany: pick_multiple, title: 'Select a version', placeHolder: allVersions[0].label, ignoreFocusOut: true, });
             if (pick_multiple) {
                selectedVersion = selectedVersions[0];
-               //compareVersion = selectedVersions[1];
-               //console.log('compareVersion:', compareVersion);
             } else {
                selectedVersions = [selectedVersions];
                selectedVersion = selectedVersions[0];
@@ -481,7 +476,6 @@ class RestApi {
             maxRedirects: 5 // Optional, axios follows redirects by default
          };
          try {
-            // const response = await fetch(apiUrl + apiRequest, requestOptions);
             const fullUrl = encodeURI(apiUrl + apiRequest);  
             console.log('(getRemoteFileContents) fullUrl:', fullUrl);
             const selectedVersionLabel = selectedVersions[i]?.label || ''; 
@@ -719,14 +713,12 @@ class RestApi {
          ;
       console.log('urlPath:', urlPath)
       const filePath = this.remoteFile?.path ? this.remoteFile.path : this.remoteFile;
-      // console.log('filePath:', filePath)
       const apiRequest = `${path.posix.join(urlPath, filePath)}?component=properties`;
       const requestOptions = {
          headers: { "X-Auth-Token": this.authToken },
          maxRedirects: 5 // Optional, axios follows redirects by default
       };
       try {
-         // const response = await fetch(apiUrl + apiRequest, requestOptions);
          const fullUrl = encodeURI(apiUrl + apiRequest)
          const response = await axios.get(fullUrl, requestOptions);
          const contentType = response.headers['content-type'];
@@ -803,15 +795,12 @@ class RestApi {
 
          folderContents = await Promise.all(
             files.map(async ([name, type]) => {
-               // const filePath = path.join(folderPath, file);
                const filePath = vscode.Uri.joinPath(folderPath, name);
-               // const stats = await fs.promises.stat(filePath); // Asynchronous stat call
                const stats = await vscode.workspace.fs.stat(filePath); // Asynchronous stat call
                let isBinary = null;
                let md5sum = '';
                let fileType = '';
 
-               // if (stats.isFile()) {
                if (type === vscode.FileType.File && filePath.scheme === "file") {
                   fileType = 'file';
                   isBinary = isBinaryFile(filePath.fsPath);
@@ -910,14 +899,12 @@ class RestApi {
          ;
       console.log('urlPath:', urlPath);
       const filePath = this.remoteFile;
-      // console.log('filePath:', filePath)
       const apiRequest = `${path.posix.join(urlPath, filePath)}?component=children&expand=item&limit=10000`;
       const requestOptions = {
          headers: { "X-Auth-Token": this.authToken },
          maxRedirects: 5 // Optional, axios follows redirects by default
       };
       try {
-         // const response = await fetch(apiUrl + apiRequest, requestOptions);
          const fullUrl = encodeURI(apiUrl + apiRequest)
          const response = await axios.get(fullUrl, requestOptions);
          const contentType = response.headers['content-type'];
@@ -985,7 +972,6 @@ class RestApi {
          maxRedirects: 5 // Optional, axios follows redirects by default
       };
       try {
-         // const response = await fetch(apiUrl + apiRequest, requestOptions);
          const fullUrl = encodeURI(apiUrl + apiRequest)
          console.log('fullUrl:', fullUrl);
          let response;
@@ -1153,7 +1139,6 @@ class RestApi {
             const encoder = new TextEncoder();
             const encodedContent = encoder.encode(this.fileContents[0]);
             await vscode.workspace.fs.writeFile(outFile, encodedContent);  
-            // await fs.promises.writeFile(outFile, this.fileContents[0]);
             console.log(`Saved as ${outFile}`);
             vscode.window.showInformationMessage(`Saved as ${outFile}.`)
          }
@@ -1245,7 +1230,6 @@ class RestApi {
                .map(p => ({ defaultValue:p._, ...p.$}))
                .map(p => ({...p, value: p.defaultValue || '', defaultValue: undefined}))];
          }
-         // const editableParams = jobParams.map(p => ({[`[${p.name}] ${p.label}:`]: p.value, includeSubFolders: p.includeSubFolders}));
          const editableParams = jobParams.map(p => ({[`[${p.name}] ${p.label}:`]: p.value}));
          console.log('(getRemoteJobParameters) jobParams:\n', jobParams);
          console.log('(getRemoteJobParameters) editableParams:\n', editableParams);
@@ -1293,22 +1277,6 @@ class RestApi {
          if (!Array.isArray(this.fileContents)) {
             this.fileContents = [this.fileContents];
          }
-
-         /*
-         // Simple synchronous temporary file creation, the file will be closed and unlinked on process exit.
-         const tempFile = tmp.fileSync({ postfix: extension });
-         console.log("tempFile:", tempFile);
-
-         await fs.promises.writeFile(tempFile.name, this.fileContents[0]);
-         console.log(`Downloaded as ${tempFile.name}`);
-         // Set the file to read-only (cross-platform)
-         try {
-            await fs.promises.chmod(tempFile.name, 0o444);
-            console.log(`File is now read-only: ${tempFile.name}`);
-         } catch (err) {
-            console.error(`Failed to set file as read-only: ${err}`);
-         }
-         */
 
          // const fileName = this.remoteFile.slice(this.remoteFile.lastIndexOf("/") + 1);
          const fileName = path.basename(this.remoteFile);
@@ -1597,15 +1565,6 @@ class RestApi {
       } else {
          filename = filePath.path.split(/[\\/]/).slice(-1)[0];
          console.log('filename:', filename);
-         /*
-         const data = await fs.promises.readFile(this.localFile);
-         const decoder = new TextDecoder('utf-8');
-         const fileContents = decoder.decode(data);
-         console.log('fileContents:', fileContents);
-         formdata.append('uploadFile', Buffer.from(fileContents), filename);    // works
-         */
-         // formdata.append('uploadFile', new Blob([fileContents]), filename);  // fails because Blob is not a stream
-         // formdata.append('uploadFile', fs.createReadStream(filePath || this.localFile), filename);   // using local filesystem
          // Read the file contents using vscode workspace filesystem
          let fileUri;
          if (filePath && typeof filePath === 'string') {
@@ -1642,12 +1601,6 @@ class RestApi {
          this.localFile :
          vscode.Uri.file(this.localFile)
       );
-      // const remoteFile = this.localFile
-      //    .replace(/\\/g, "/")
-      //    .replace(
-      //       workingWSFolder.uri.fsPath.replace(/\\/g, "/") + this.config.localRootPath,
-      //       ""
-      //    );
       const remoteFile = (this.localFile.fsPath || this.localFile.path || `${this.localFile}`)
          .replace(/\\/g, "/")
          .replace(
@@ -1709,7 +1662,6 @@ class RestApi {
             },
            maxRedirects: 0 // Handle redirection manually
          };
-         // console.log(JSON.stringify(requestOptions));
          try {
             const fullUrl = encodeURI(apiUrl + apiRequest);
             console.log('fullUrl:', fullUrl);
@@ -1792,7 +1744,6 @@ class RestApi {
          }
       } else {
          console.log(`Invalid parameter ${param}, aborting uploadAndExpand.`);
-         // vscode.window.showWarningMessage(`Invalid parameter ${param}, aborting uploadAndExpand.`);
          return {issues: 1, message: `Invalid parameter ${param}, aborting uploadAndExpand.`};
       }
    }
@@ -1832,7 +1783,6 @@ class RestApi {
             vscode.window.showWarningMessage(`No local File specified, aborting upload.`);
             return;
          }
-         // if (!fs.existsSync(this.localFile)) {
          if (!this.getFileStat(this.localFile)) {
             console.log(`Local File "${this.localFile}" not found, aborting upload.`);
             vscode.window.showWarningMessage(`Local File "${this.localFile}" not found, aborting upload.`);
@@ -1850,11 +1800,9 @@ class RestApi {
       const filePath = this.remoteFile;
       console.log('filePath:', filePath);
       let apiRequest = `${path.posix.join(urlPath, filePath)}?action=upload&version=MINOR&createParents=true&overwrite=true`;
-      // await this.enterComment(`Add / Update ${(this.localFile?.split(/[\\\/]/)??'...').slice(-1)}`);
       await this.enterMultiLineComment(`Add / Update ${((this.localFile.path || this.localFile).toString().split(/[\\/]/) || '...').slice(-1)}\n\n`);
       if (this.comment) {
          apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
-         // apiRequest = `${apiRequest}&comment=${this.comment}`;
       }
       apiRequest = `${apiRequest}&expand=item,status`;
       console.log('useEditorContents:', useEditorContents);
@@ -2180,15 +2128,7 @@ class RestApi {
    async getJobSubmissionManifest(submissionId, location = 'repository') {
       await this.logon();
       const apiUrl = `https://${this.host}/lsaf/api`;
-      // const getUrl = async o => ({
-      //    path: o["repository-file"][0]._,
-      //    ...o["repository-file"][0].$,
-      //    ...(await this.getUrlFromManifestItem(o, `https://${this.host}`))
-      // });
       let requestOptions, response, manifestPath, data;
-      // let manifestContent, manifestInputs, manifestOutputs,
-      //    manifestPrograms, manifestLog, manifestLst, manifestParameters, manifestMetrics,
-      //    manifestInputExternalRefs, manifestOutputExternalRefs, submission;
       // Get manifest metadata
       requestOptions = {
          method: 'get',
@@ -2237,67 +2177,6 @@ class RestApi {
                && /^<\?xml /.test(response.data)
             ) {
                data = await this.parseManifestXml (response.data);
-               // manifestContent = await this.parseXmlString(response.data); 
-               // console.log('manifestContent:', manifestContent);
-               // manifestOutputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].outputs[0].output.map(getUrl))).map(o => o.value);
-               // console.log('manifestOutputs:', manifestOutputs);
-               // manifestLog = (await Promise.allSettled(manifestContent["job-manifest"].job[0].logs[0].log.map(getUrl))).map(o => o.value)[0];
-               // console.log('manifestLog:', manifestLog);
-               // manifestLst = (await Promise.allSettled(manifestContent["job-manifest"].job[0].results[0].result.map(getUrl))).map(o => o.value)[0];
-               // console.log('manifestLst:', manifestLst);
-               // manifestInputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].inputs[0].input.map(getUrl)))
-               //    .map(o => o.value)
-               //    .filter(o => o != null)
-               //    ;
-               // manifestInputExternalRefs = manifestContent["job-manifest"].job[0].inputs[0]["external-ref"].map(p => p.$);
-               // manifestOutputExternalRefs = manifestContent["job-manifest"].job[0].outputs[0]["external-ref"].map(p => p.$);
-               // console.log('manifestInputs:', manifestInputs);
-               // manifestPrograms = (await Promise.allSettled(manifestContent["job-manifest"].job[0].programs[0].program.map(getUrl))).map(o => o.value);
-               // console.log('manifestPrograms:', manifestPrograms);
-               // manifestParameters = {};
-               // for (const key in manifestContent["job-manifest"].job[0].parameters[0]) {
-               //    manifestParameters = { 
-               //    ...manifestParameters,
-               //    [key]: manifestContent["job-manifest"].job[0].parameters[0][key].map(p => ({...p.$, value: p._ || ''}))}
-               // }
-               // manifestMetrics = {
-               //    transferMetrics: manifestContent["job-manifest"].metrics[0].transferMetrics[0].transferMetric.map(p => p.$)
-               // };
-               // submission = {
-               //    ...manifestContent["job-manifest"]["job-submission"][0].$,
-               //    ...manifestContent["job-manifest"]["job-submission"].reduce((acc, p) => {
-               //          Object.keys(p).forEach(k => {
-               //             if (k !== '$') {
-               //             acc = { ...acc, [k]: p[k][0]}
-               //             }
-               //          })
-               //          return acc;
-               //       }, {})
-               //    };
-               // delete submission.$;
-               // data = {
-               //    jobPath: manifestContent["job-manifest"].job[0]['repository-file'][0]._,
-               //    ...manifestContent["job-manifest"].job[0]['repository-file'][0].$,
-               //    "job-manifest-version": manifestContent["job-manifest"].$.version,
-               //    type: manifestContent["job-manifest"].type[0],
-               //    ...(['owner', 'run-as-owner', 'description'].reduce((acc, key) => {
-               //       acc = {...acc, [key]: manifestContent["job-manifest"].job[0][key][0]}
-               //       return acc;
-               //    }, {})),
-               //    ...manifestContent["job-manifest"].$,
-               //    submission,
-               //    metrics: manifestMetrics,
-               //    programs: manifestPrograms,
-               //    parameters: manifestParameters,
-               //    log: manifestLog,
-               //    lst: manifestLst,
-               //    outputs: manifestOutputs,
-               //    outputExternalRefs: manifestOutputExternalRefs,
-               //    inputs: manifestInputs,
-               //    inputExternalRefs: manifestInputExternalRefs
-               // };
-               // showMultiLineText(beautify(JSON.stringify(data)), "Manifest Content", manifestPath);
-               // data = this.removeNulls(data);
             }
             console.log('response.status:', response.status, response.statusText);
          } catch (error) {
@@ -2320,53 +2199,19 @@ class RestApi {
 
    async getUrlFromManifestItem(o, origin, retry=2) {
       // let headUrl;
-      let contentsUrl, propertiesUrl, versionsUrl, headResponse, properties, id, date, versioned, version;
+      let contentsUrl, propertiesUrl, versionsUrl, properties, id, date, versioned, version;
       if (o["repository-file"]) {
          id = o["repository-file"][0].$.id;
          date = o["repository-file"][0].$.date;
-         // headUrl = `${origin}/lsaf/rest/repository/items${o["repository-file"][0]._}?` +
-         //          `&id=${o["repository-file"][0].$.id}` +
-         //          `&` +
-         //          `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
-         //          ;
-         propertiesUrl =  `${origin}/lsaf/api/repository/files${o["repository-file"][0]._}?component=properties` // +
-                  // `&id=${o["repository-file"][0].$.id}` +
-                  // `&` +
-                  // `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
-                  ;
-         contentsUrl =  `${origin}/lsaf/api/repository/files${o["repository-file"][0]._}?component=contents` // +
-                           // `&id=${o["repository-file"][0].$.id}` +
-                           // `&` +
-                           // `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
-                           ;
-         versionsUrl =  `${origin}/lsaf/api/repository/files${o["repository-file"][0]._}?component=versions` // +
-                           // `&id=${o["repository-file"][0].$.id}` +
-                           // `&` +
-                           // `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
-                           ;
+         propertiesUrl =  `${origin}/lsaf/api/repository/files${o["repository-file"][0]._}?component=properties`;
+         contentsUrl =  `${origin}/lsaf/api/repository/files${o["repository-file"][0]._}?component=contents`;
+         versionsUrl =  `${origin}/lsaf/api/repository/files${o["repository-file"][0]._}?component=versions`;
       } else if (o["workspace-file"]) {
          id = o["workspace-file"][0].$.id;
          date = o["workspace-file"][0].$.date;
-         // headUrl = `${origin}/lsaf/rest/workspace/items${o["workspace-file"][0]._}?` +
-         //          `&id=${o["repository-file"][0].$.id}` +
-         //          `&` +
-         //          `&lastModified=${new Date(o["workspace-file"][0].$.date).getTime()}`
-         //          ;
-         propertiesUrl =  `${origin}/lsaf/api/workspace/files${o["workspace-file"][0]._}?component=properties` // +
-                  // `&id=${o["workspace-file"][0].$.id}` +
-                  // `&` +
-                  // `&lastModified=${new Date(o["workspace-file"][0].$.date).getTime()}`
-                  ;
-         contentsUrl =  `${origin}/lsaf/api/workspace/files${o["workspace-file"][0]._}?component=contents` // +
-                           // `&id=${o["workspace-file"][0].$.id}` +
-                           // `&` +
-                           // `&lastModified=${new Date(o["workspace-file"][0].$.date).getTime()}`
-                           ;
-         versionsUrl =  `${origin}/lsaf/api/workspace/files${o["workspace-file"][0]._}?component=versions` // +
-                           // `&id=${o["workspace-file"][0].$.id}` +
-                           // `&` +
-                           // `&lastModified=${new Date(o["workspace-file"][0].$.date).getTime()}`
-                           ;
+         propertiesUrl =  `${origin}/lsaf/api/workspace/files${o["workspace-file"][0]._}?component=properties`;
+         contentsUrl =  `${origin}/lsaf/api/workspace/files${o["workspace-file"][0]._}?component=contents`;
+         versionsUrl =  `${origin}/lsaf/api/workspace/files${o["workspace-file"][0]._}?component=versions`;
       } else {
          debugger;
          console.log('(getUrlFromManifest) unexpected Object.keys(o):', Object.keys(o));
@@ -2374,9 +2219,6 @@ class RestApi {
       }
       let exists = false;
       try {
-         //headResponse = await axios.head(headUrl, { headers: { "X-Auth-Token": this.authToken }, maxRedirects: 5 });
-         //if (headResponse.status === 200) {
-            // exists = true;
          properties = await axios.get(propertiesUrl, { headers: { "X-Auth-Token": this.authToken }, maxRedirects: 5 });
          if (properties.status === 200) {
             if (properties?.data?.id === id && properties?.data?.lastModified === date) {
@@ -2430,15 +2272,15 @@ class RestApi {
       console.log('manifestContent:', manifestContent);
       if (manifestContent.manifest) {
          manifestOutputs = manifestContent.manifest.outputs[0].file.map(o => ({
-           ...o.$,
-           path: new URL(o.$.uri).pathname,
-           contentsUrl: `https://${this.host}/lsaf/api/${location}/files${new URL(o.$.uri).pathname}?component=contents`
+            ...o.$,
+            path: new URL(o.$.uri).pathname,
+            contentsUrl: `https://${this.host}/lsaf/api/${location}/files${new URL(o.$.uri).pathname}?component=contents`
          }));
          console.log('manifestOutputs:', manifestOutputs);
          manifestInputs = manifestContent.manifest.inputs[0].file.map(o => ({
-           ...o.$,
-           path: new URL(o.$.uri).pathname,
-           contentsUrl: `https://${this.host}/lsaf/api/${location}/files${new URL(o.$.uri).pathname}?component=contents`
+            ...o.$,
+            path: new URL(o.$.uri).pathname,
+            contentsUrl: `https://${this.host}/lsaf/api/${location}/files${new URL(o.$.uri).pathname}?component=contents`
          }));
          console.log('manifestInputs:', manifestInputs);
          manifestPrograms = manifestContent.manifest.tasks[0].file.map(o => ({
@@ -2469,7 +2311,7 @@ class RestApi {
             inputs: manifestInputs,
             inputExternalRefs: manifestInputExternalRefs
          }
-       } else {
+      } else {
          manifestOutputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].outputs[0].output.map(getUrl))).map(o => o.value);
          console.log('manifestOutputs:', manifestOutputs);
          manifestLog = (await Promise.allSettled(manifestContent["job-manifest"].job[0].logs[0].log.map(getUrl))).map(o => o.value)[0];
