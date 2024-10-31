@@ -1,6 +1,8 @@
 const vscode = require("vscode");
 const { initWebR, webR } = require('./read_sas.js');
 
+let webrRepo;
+
 console.log('Starting extension.js');
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
@@ -40,6 +42,9 @@ async function activate(context) {
     //   server: 'server1',
     //   status: 'in-progress' // 'COMPLETED_SUCCESSFULLY', 'COMPLETED_ERRORS', 'FAILED', etc.
     // }
+
+    webrRepo = context.asAbsolutePath('webr-repo');
+    console.log('webrRepo:', webrRepo);
 
     const restApiUploadCommand = vscode.commands.registerCommand(
         "extension.restApiUpload",
@@ -90,7 +95,7 @@ async function activate(context) {
     context.subscriptions.push(compareFolderContentsCommand);
 
     console.log('Starting webR...');
-    await initWebR(webR);
+    await initWebR(webR, webrRepo);
 
     console.log('vscode-lsaf-rest-api extension activated!');
 }
