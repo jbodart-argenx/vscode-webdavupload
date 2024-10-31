@@ -10,7 +10,9 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 
 
 // REST API functions
-const {  restApiVersions, restApiCompare, restApiUpload, restApiProperties, restApiSubmitJob } = require('./rest-api.js');
+const {  restApiVersions, restApiCompare, restApiUpload, restApiProperties, restApiSubmitJob,
+    restApiViewManifest
+ } = require('./rest-api.js');
 
 const { localFolderContents, restApiFolderContents, compareFolderContents } = require('./folderView.js');
 
@@ -57,7 +59,11 @@ async function activate(context) {
     );
     const restApiSubmitJobCommand = vscode.commands.registerCommand(
         "extension.restApiSubmitJob",
-        restApiSubmitJob
+        (param) => restApiSubmitJob(param, context)
+    );
+    const restApiViewManifestCommand = vscode.commands.registerCommand(
+        "extension.restApiViewManifest",
+        (param) => restApiViewManifest(param, context)
     );
     const restApiFolderContentsCommand = vscode.commands.registerCommand(
         "extension.restApiFolderContents",
@@ -65,11 +71,11 @@ async function activate(context) {
     );
     const localFolderContentsCommand = vscode.commands.registerCommand(
         "extension.localFolderContents",
-        localFolderContents
+        (param) => localFolderContents(param, context)
     );
     const compareFolderContentsCommand = vscode.commands.registerCommand(
         "extension.compareFolderContents",
-        compareFolderContents
+        (param) => compareFolderContents(param, null, context)
     );
 
 
@@ -78,6 +84,7 @@ async function activate(context) {
     context.subscriptions.push(restApiPropertiesCommand);
     context.subscriptions.push(restApiVersionsCommand);
     context.subscriptions.push(restApiSubmitJobCommand);
+    context.subscriptions.push(restApiViewManifestCommand);
     context.subscriptions.push(restApiFolderContentsCommand);
     context.subscriptions.push(localFolderContentsCommand);
     context.subscriptions.push(compareFolderContentsCommand);
