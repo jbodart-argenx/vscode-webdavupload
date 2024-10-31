@@ -1,25 +1,53 @@
 const path = require('path');
 const { WebR } = require('webr');
+const fs = require('fs');
 
 let webR;
 
-async function initWebR() {
+async function initWebR(webrLibPath = path.join(__dirname, '..', 'webr-repo')) {
    webR = new WebR();
    await webR.init();
-   await webR.installPackages(['haven', 'jsonlite'], {mount: true, quiet: false, repos: "https://repo.r-wasm.org/"});
+   // Mount filesystem image with a library of pre-installed R packages
+   await webR.FS.mkdir('/my-library');
+   let libdata = fs.readFileSync(path.join(webrLibPath, 'library.data'));
+   let libmetadata = JSON.parse(fs.readFileSync(path.join(webrLibPath, 'library.js.metadata'), 'utf-8'));
+   await webR.FS.mount(
+      "WORKERFS", 
+      {
+         packages: [
+            {
+               blob: libdata,
+               metadata: libmetadata,
+            }
+         ],
+      },
+      '/my-library'
+   );
+   await webR.evalR(`.libPaths(c(.libPaths(), "/my-library"))`);
+   // // Download and install additional R packages (if not available from mounted library)
+   // await webR.installPackages(['haven', 'jsonlite'],
+   //    {mount: true, quiet: false, repos: "https://repo.r-wasm.org/"}
+   // );
+   // Make virtual filesystem directory where actual data folders will be mounted
    await webR.FS.mkdir('/data');
    return webR;
 }
 
 async function read_sas(sas7bdatFile, rows = 'TRUE', cols = 'TRUE'){
+   // Identify directory with data
    let datadir = path.dirname(sas7bdatFile);
    console.log('datadir:', datadir);
+   // Mount directory with data
    await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
-   // await webR.evalR(`data <- haven::read_sas("/data/${path.basename(sas7bdatFile)}")`);
+   // Read data and export as JSON
    let data_json = await webR.evalR(`jsonlite::toJSON(haven::read_sas("/data/${path.basename(sas7bdatFile)}")[${rows},${cols}])`);
+   // Unmount directory with data
    await webR.FS.unmount("/data");
-   webR.destroy(data_json);
+   // Get the JSON data into JavaScript
    let json = await data_json.toArray();
+   // delete the webR JSON data
+   webR.destroy(data_json);
+   // parse and return the JavaScript JSON data
    return JSON.parse(json);
 }
 
