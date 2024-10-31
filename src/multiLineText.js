@@ -37,7 +37,7 @@ async function getMultiLineText(defaultValue = '') {
 
 
 // This is the async function that opens a webview and collects multi-line input from the user
-async function showMultiLineText(textValue = '', title="Text Content", header="", buttonLabel="Dismiss") {
+async function showMultiLineText(textValue = '', title="Text Content", header="", buttonLabel="Dismiss", preserveWiteSpace = true) {
    const editable=false;
    return new Promise((resolve, reject) => {
       // Create and show a new webview panel
@@ -51,7 +51,7 @@ async function showMultiLineText(textValue = '', title="Text Content", header=""
       );
 
       // Set the content of the webview
-      panel.webview.html = getWebviewContent(textValue, title, header, buttonLabel, editable);
+      panel.webview.html = getWebviewContent(textValue, title, header, buttonLabel, editable, preserveWiteSpace);
       
 
       // Handle messages from the webview
@@ -74,7 +74,7 @@ async function showMultiLineText(textValue = '', title="Text Content", header=""
 }
 
 // Helper function to get the HTML content for the webview
-function getWebviewContent(defaultValue, title="File Upload Comment", header=undefined, buttonLabel="Submit", editable=true) {
+function getWebviewContent(defaultValue, title="File Upload Comment", header=undefined, buttonLabel="Submit", editable=true, preserveWiteSpace = false) {
    if (! header) header = `Enter ${title} below:`;
    const escapedTitle = title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
    const escapedHeader = header.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -96,7 +96,8 @@ function getWebviewContent(defaultValue, title="File Upload Comment", header=und
                margin: 0;
                height: 100vh;
                box-sizing: border-box;
-               font-family: sans-serif;
+               font-family: ${preserveWiteSpace ? 'monospace;' : 'sans-serif'};
+               ${preserveWiteSpace && 'white-space: pre;'}
             }
             textarea {
                flex: 1;

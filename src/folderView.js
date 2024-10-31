@@ -91,7 +91,7 @@ async function restApiFolderContents(param, _arg2, config = null) {
 console.log('typeof restApiFolderContents:', typeof restApiFolderContents);
 
 
-async function localFolderContents(param) {
+async function localFolderContents(param, context) {
    let folderPath;
    if (typeof param === 'string') {
       param = vscode.Uri.file(param);
@@ -144,7 +144,8 @@ async function localFolderContents(param) {
             folderPath,
             updatedFolderContents,
             isLocal,
-            restApi.config
+            restApi.config,
+            context
          );
       } else {
          showMultiLineText(folderContentsText, "Local Folder Contents", `Local folder contents: ${folderPath}`);
@@ -157,8 +158,8 @@ async function localFolderContents(param) {
 console.log('typeof localFolderContents:', typeof localFolderContents);
 
 
-// eslint-disable-next-line require-await
-async function showFolderView(folderPath, folderContents, isLocal, config) {
+
+async function showFolderView(folderPath, folderContents, isLocal, config, context) {
    console.log('(showFolderView) folderPath:', folderPath);
    console.log('(showFolderView) isLocal:', isLocal)
    console.log('(showFolderView) folderPath:', folderPath);
@@ -170,6 +171,9 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
       vscode.ViewColumn.One,
       {
          enableScripts: true, // Allow running JavaScript in the Webview
+         localResourceRoots: [
+            vscode.Uri.file(path.join(context.extensionPath, 'webr-repo'))
+         ],
       }
    );
 
@@ -239,7 +243,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                      if (action == null) {  // cancelled
                         return;
                      } else if (action.indexOf('Compare') > -1) {
-                        return compareFolderContents(localPath, config);
+                        return compareFolderContents(localPath, config, context);
                      } else if (action.indexOf('Download') > -1) {
                         const expand = /expand/i.test(action) || null;
                         return restApiDownloadFolderAsZip(localPath, config, expand, /overwrite/i.test(action));
@@ -273,7 +277,7 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                         }
                         return restApiZipUploadAndExpand(message.filePath, remoteConfig);
                      } else if (action === 'Compare to Remote') {
-                        return compareFolderContents(message.filePath, config);
+                        return compareFolderContents(message.filePath, config, context);
                      } else if (action === 'Open') {
                         const fileUri = vscode.Uri.file(message.filePath);
                         localFolderContents(fileUri);
@@ -379,14 +383,14 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                                  break;
                               case '.sas7bdat':
                                  data = await read_sas(message.filePath);
-                                 // console.log(beautify(JSON.stringify(data)));
-                                 showTableView(`Imported SAS data from local file: ${message.filePath}`, data);
+                                 console.log(beautify(JSON.stringify(data)));
+                                 showTableView(`Imported SAS data from local file: ${message.filePath}`, data, context);
                                  showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
                                  break;
                               case '.xpt':
                                  data = await read_xpt(message.filePath);
-                                 // console.log(beautify(JSON.stringify(data)));
-                                 showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data);
+                                 console.log(beautify(JSON.stringify(data)));
+                                 showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data, context);
                                  showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
                                  break;
                               default:
@@ -675,7 +679,7 @@ function getOneFolderWebviewContent(folderPath, isLocal, files, config) {
 }
 
 
-async function compareFolderContents(param, config = null) {
+async function compareFolderContents(param, config = null, context = null) {
    let folder1Path, statusMessage;
    if (typeof param === 'string') {
       param = vscode.Uri.file(param);
@@ -830,7 +834,9 @@ async function compareFolderContents(param, config = null) {
             if (webViewReady) {
                showTwoFoldersView(bothFoldersContents,
                   folder1Path, isFolder1Local, folder1Config,
-                  folder2Path, isFolder2Local, folder2Config);
+                  folder2Path, isFolder2Local, folder2Config,
+                  context
+               );
             } else {
                showMultiLineText(bothFoldersContentsText,
                   "Both Folders Contents", `Local folder: ${folder1Path}, Remote folder: ${folder2Config.label}: ${remoteFolderPath}`);
@@ -855,8 +861,8 @@ async function compareFolderContents(param, config = null) {
 console.log('typeof compareFolderContents:', typeof compareFolderContents);
 
 
-// eslint-disable-next-line require-await
-async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, folder1Config, folder2Path, isFolder2Local, folder2Config) {
+
+async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, folder1Config, folder2Path, isFolder2Local, folder2Config, context) {
 
    const panel = vscode.window.createWebviewPanel(
       "folderContents",  // webview identifier
@@ -865,6 +871,9 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
       vscode.ViewColumn.One,
       {
          enableScripts: true, // Allow running JavaScript in the Webview
+         localResourceRoots: [
+            vscode.Uri.file(path.join(context.extensionPath, 'webr-repo'))
+         ],
       }
    );
 
@@ -1053,7 +1062,7 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                      }
                      return restApiZipUploadAndExpand(message.filePath, remoteConfig);
                   } else if (action === 'Compare to Remote') {
-                     return compareFolderContents(message.filePath, config);
+                     return compareFolderContents(message.filePath, config, context);
                   } else if (action === 'Open') {
                      const fileUri = vscode.Uri.file(message.filePath);
                      localFolderContents(fileUri);
@@ -1093,14 +1102,14 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                            break;
                         case '.sas7bdat':
                            data = await read_sas(message.filePath);
-                           // console.log(beautify(JSON.stringify(data)));
-                           showTableView(`Imported SAS data from local file: ${message.filePath}`, data);
+                           console.log(beautify(JSON.stringify(data)));
+                           showTableView(`Imported SAS data from local file: ${message.filePath}`, data, context);
                            showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
                            break;
                         case '.xpt':
                            data = await read_xpt(message.filePath);
-                           // console.log(beautify(JSON.stringify(data)));
-                           showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data);
+                           console.log(beautify(JSON.stringify(data)));
+                           showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data, context);
                            showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
                            break;
                         default:
@@ -1189,7 +1198,7 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                         if (action == null) {  // cancelled
                            return;
                         } else if (action === 'Compare to Local') {
-                           return compareFolderContents(localPath, config);
+                           return compareFolderContents(localPath, config, context);
                         } else if (action.split(' ')[0] === 'Download') {
                            const expand = /expand/i.test(action);
                            return restApiDownloadFolderAsZip(localPath, config, expand, /overwrite/i.test(action));
