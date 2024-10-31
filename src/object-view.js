@@ -120,7 +120,7 @@ function alignValue(value) {
       value = Number(value);
       return value ? ' text-align : right;' : '';
    } catch (err){
-      console.log('(alignValue) value=', value, ' -> Error:', err);
+      console.log('(alignValue) value=', value, ' -> Error.code:', err.code, err);
       return '';
    }
 }
@@ -131,7 +131,9 @@ function showValue(value) {
       const urlValue = new URL(value);
       return `<a href="${urlValue.href}">${valueStr}</a>`;
    } catch (err) {
-      console.log('(showValue) value:', value, '-> Error:', err);
+      if (err.code !== 'ERR_INVALID_URL'){
+         console.log('(showValue) value:', value, ':', err);
+      }
       return valueStr;
    }
 }
