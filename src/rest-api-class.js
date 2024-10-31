@@ -1949,7 +1949,7 @@ class RestApi {
                   const editable = false;
                   if (this.manifest){
                      try{
-                        await getObjectView(this.manifest, editable, "Job Submission Manifest", "Job Submission Manifest");
+                        await getObjectView(this.manifest, editable, "Job Submission Manifest", "Job Submission Manifest", this.context, this);
                      } catch(error) {
                         debugger;
                         if (error === "cancelled") {
@@ -1991,11 +1991,17 @@ class RestApi {
 
    async getJobSubmissionManifest(submissionId, location = 'repository') {
       await this.logon();
-      const getUrl = async o => ({path: o["repository-file"][0]._, ...o["repository-file"][0].$, ...(await this.getUrlFromManifestItem(o))});
       const apiUrl = `https://${this.host}/lsaf/api`;
-      let requestOptions, response, manifestPath, manifestContent, manifestInputs, manifestOutputs,
-         manifestPrograms, manifestLog, manifestLst, manifestParameters, manifestMetrics,
-         manifestInputExternalRefs, manifestOutputExternalRefs, submission, data;
+      // const getUrl = async o => ({
+      //    path: o["repository-file"][0]._,
+      //    ...o["repository-file"][0].$,
+      //    ...(await this.getUrlFromManifestItem(o, `https://${this.host}`))
+      // });
+      let requestOptions, response, manifestPath, data;
+      // let manifestContent, manifestInputs, manifestOutputs,
+      //    manifestPrograms, manifestLog, manifestLst, manifestParameters, manifestMetrics,
+      //    manifestInputExternalRefs, manifestOutputExternalRefs, submission;
+      // Get manifest metadata
       requestOptions = {
          method: 'get',
          url: apiUrl + `/jobs/submissions/${submissionId}/manifest`,
@@ -2025,6 +2031,7 @@ class RestApi {
          location = location || response.data.schematype;
          console.log('response.data:', response.data);
          console.log('location:', location, 'manifestPath:', manifestPath);
+         // Get manifest contents
          requestOptions.url = apiUrl + `/${location}/files${manifestPath}?component=contents`;
          console.log('requestOptions.url:', requestOptions.url);
          try {
@@ -2041,67 +2048,68 @@ class RestApi {
             if (contentType === 'application/octet-stream;charset=UTF-8'
                && /^<\?xml /.test(response.data)
             ) {
-               manifestContent = await this.parseXmlString(response.data); 
-               console.log('manifestContent:', manifestContent);
-               manifestOutputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].outputs[0].output.map(getUrl))).map(o => o.value);
-               console.log('manifestOutputs:', manifestOutputs);
-               manifestLog = (await Promise.allSettled(manifestContent["job-manifest"].job[0].logs[0].log.map(getUrl))).map(o => o.value)[0];
-               console.log('manifestLog:', manifestLog);
-               manifestLst = (await Promise.allSettled(manifestContent["job-manifest"].job[0].results[0].result.map(getUrl))).map(o => o.value)[0];
-               console.log('manifestLst:', manifestLst);
-               manifestInputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].inputs[0].input.map(getUrl)))
-                  .map(o => o.value)
-                  .filter(o => o != null)
-                  ;
-               manifestInputExternalRefs = manifestContent["job-manifest"].job[0].inputs[0]["external-ref"].map(p => p.$);
-               manifestOutputExternalRefs = manifestContent["job-manifest"].job[0].outputs[0]["external-ref"].map(p => p.$);
-               console.log('manifestInputs:', manifestInputs);
-               manifestPrograms = (await Promise.allSettled(manifestContent["job-manifest"].job[0].programs[0].program.map(getUrl))).map(o => o.value);
-               console.log('manifestPrograms:', manifestPrograms);
-               manifestParameters = {};
-               for (const key in manifestContent["job-manifest"].job[0].parameters[0]) {
-                  manifestParameters = { 
-                  ...manifestParameters,
-                  [key]: manifestContent["job-manifest"].job[0].parameters[0][key].map(p => ({...p.$, value: p._ || ''}))}
-               }
-               manifestMetrics = {
-                  transferMetrics: manifestContent["job-manifest"].metrics[0].transferMetrics[0].transferMetric.map(p => p.$)
-               };
-               submission = {
-                  ...manifestContent["job-manifest"]["job-submission"][0].$,
-                  ...manifestContent["job-manifest"]["job-submission"].reduce((acc, p) => {
-                        Object.keys(p).forEach(k => {
-                           if (k !== '$') {
-                           acc = { ...acc, [k]: p[k][0]}
-                           }
-                        })
-                        return acc;
-                     }, {})
-                  };
-               delete submission.$;
-               data = {
-                  jobPath: manifestContent["job-manifest"].job[0]['repository-file'][0]._,
-                  ...manifestContent["job-manifest"].job[0]['repository-file'][0].$,
-                  "job-manifest-version": manifestContent["job-manifest"].$.version,
-                  type: manifestContent["job-manifest"].type[0],
-                  ...(['owner', 'run-as-owner', 'description'].reduce((acc, key) => {
-                     acc = {...acc, [key]: manifestContent["job-manifest"].job[0][key][0]}
-                     return acc;
-                  }, {})),
-                  ...manifestContent["job-manifest"].$,
-                  submission,
-                  metrics: manifestMetrics,
-                  programs: manifestPrograms,
-                  parameters: manifestParameters,
-                  log: manifestLog,
-                  lst: manifestLst,
-                  outputs: manifestOutputs,
-                  outputExternalRefs: manifestOutputExternalRefs,
-                  inputs: manifestInputs,
-                  inputExternalRefs: manifestInputExternalRefs
-               };
-               showMultiLineText(beautify(JSON.stringify(data)), "Manifest Content", manifestPath);
-               data = this.removeNulls(data);
+               data = await this.parseManifestXml (response.data);
+               // manifestContent = await this.parseXmlString(response.data); 
+               // console.log('manifestContent:', manifestContent);
+               // manifestOutputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].outputs[0].output.map(getUrl))).map(o => o.value);
+               // console.log('manifestOutputs:', manifestOutputs);
+               // manifestLog = (await Promise.allSettled(manifestContent["job-manifest"].job[0].logs[0].log.map(getUrl))).map(o => o.value)[0];
+               // console.log('manifestLog:', manifestLog);
+               // manifestLst = (await Promise.allSettled(manifestContent["job-manifest"].job[0].results[0].result.map(getUrl))).map(o => o.value)[0];
+               // console.log('manifestLst:', manifestLst);
+               // manifestInputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].inputs[0].input.map(getUrl)))
+               //    .map(o => o.value)
+               //    .filter(o => o != null)
+               //    ;
+               // manifestInputExternalRefs = manifestContent["job-manifest"].job[0].inputs[0]["external-ref"].map(p => p.$);
+               // manifestOutputExternalRefs = manifestContent["job-manifest"].job[0].outputs[0]["external-ref"].map(p => p.$);
+               // console.log('manifestInputs:', manifestInputs);
+               // manifestPrograms = (await Promise.allSettled(manifestContent["job-manifest"].job[0].programs[0].program.map(getUrl))).map(o => o.value);
+               // console.log('manifestPrograms:', manifestPrograms);
+               // manifestParameters = {};
+               // for (const key in manifestContent["job-manifest"].job[0].parameters[0]) {
+               //    manifestParameters = { 
+               //    ...manifestParameters,
+               //    [key]: manifestContent["job-manifest"].job[0].parameters[0][key].map(p => ({...p.$, value: p._ || ''}))}
+               // }
+               // manifestMetrics = {
+               //    transferMetrics: manifestContent["job-manifest"].metrics[0].transferMetrics[0].transferMetric.map(p => p.$)
+               // };
+               // submission = {
+               //    ...manifestContent["job-manifest"]["job-submission"][0].$,
+               //    ...manifestContent["job-manifest"]["job-submission"].reduce((acc, p) => {
+               //          Object.keys(p).forEach(k => {
+               //             if (k !== '$') {
+               //             acc = { ...acc, [k]: p[k][0]}
+               //             }
+               //          })
+               //          return acc;
+               //       }, {})
+               //    };
+               // delete submission.$;
+               // data = {
+               //    jobPath: manifestContent["job-manifest"].job[0]['repository-file'][0]._,
+               //    ...manifestContent["job-manifest"].job[0]['repository-file'][0].$,
+               //    "job-manifest-version": manifestContent["job-manifest"].$.version,
+               //    type: manifestContent["job-manifest"].type[0],
+               //    ...(['owner', 'run-as-owner', 'description'].reduce((acc, key) => {
+               //       acc = {...acc, [key]: manifestContent["job-manifest"].job[0][key][0]}
+               //       return acc;
+               //    }, {})),
+               //    ...manifestContent["job-manifest"].$,
+               //    submission,
+               //    metrics: manifestMetrics,
+               //    programs: manifestPrograms,
+               //    parameters: manifestParameters,
+               //    log: manifestLog,
+               //    lst: manifestLst,
+               //    outputs: manifestOutputs,
+               //    outputExternalRefs: manifestOutputExternalRefs,
+               //    inputs: manifestInputs,
+               //    inputExternalRefs: manifestInputExternalRefs
+               // };
+               // showMultiLineText(beautify(JSON.stringify(data)), "Manifest Content", manifestPath);
+               // data = this.removeNulls(data);
             }
             console.log('response.status:', response.status, response.statusText);
          } catch (error) {
@@ -2122,35 +2130,217 @@ class RestApi {
       return data;
    }
 
-   async getUrlFromManifestItem(o, retry=2) {
-      const headUrl = `https://xartest.ondemand.sas.com/lsaf/rest/repository/items${o["repository-file"][0]._}?` +
-                  `&id=${o["repository-file"][0].$.id}` +
-                  `&` +
-                  `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
+   async getUrlFromManifestItem(o, origin, retry=2) {
+      // let headUrl;
+      let contentsUrl, propertiesUrl, versionsUrl, headResponse, properties, id, date, versioned, version;
+      if (o["repository-file"]) {
+         id = o["repository-file"][0].$.id;
+         date = o["repository-file"][0].$.date;
+         // headUrl = `${origin}/lsaf/rest/repository/items${o["repository-file"][0]._}?` +
+         //          `&id=${o["repository-file"][0].$.id}` +
+         //          `&` +
+         //          `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
+         //          ;
+         propertiesUrl =  `${origin}/lsaf/api/repository/files${o["repository-file"][0]._}?component=properties` // +
+                  // `&id=${o["repository-file"][0].$.id}` +
+                  // `&` +
+                  // `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
                   ;
-      
-      const contentsUrl =  `https://xartest.ondemand.sas.com/lsaf/rest/repository/items/contents${o["repository-file"][0]._}?` +
-                           `&id=${o["repository-file"][0].$.id}` +
-                           `&` +
-                           `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
+         contentsUrl =  `${origin}/lsaf/api/repository/files${o["repository-file"][0]._}?component=contents` // +
+                           // `&id=${o["repository-file"][0].$.id}` +
+                           // `&` +
+                           // `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
                            ;
+         versionsUrl =  `${origin}/lsaf/api/repository/files${o["repository-file"][0]._}?component=versions` // +
+                           // `&id=${o["repository-file"][0].$.id}` +
+                           // `&` +
+                           // `&lastModified=${new Date(o["repository-file"][0].$.date).getTime()}`
+                           ;
+      } else if (o["workspace-file"]) {
+         id = o["workspace-file"][0].$.id;
+         date = o["workspace-file"][0].$.date;
+         // headUrl = `${origin}/lsaf/rest/workspace/items${o["workspace-file"][0]._}?` +
+         //          `&id=${o["repository-file"][0].$.id}` +
+         //          `&` +
+         //          `&lastModified=${new Date(o["workspace-file"][0].$.date).getTime()}`
+         //          ;
+         propertiesUrl =  `${origin}/lsaf/api/workspace/files${o["workspace-file"][0]._}?component=properties` // +
+                  // `&id=${o["workspace-file"][0].$.id}` +
+                  // `&` +
+                  // `&lastModified=${new Date(o["workspace-file"][0].$.date).getTime()}`
+                  ;
+         contentsUrl =  `${origin}/lsaf/api/workspace/files${o["workspace-file"][0]._}?component=contents` // +
+                           // `&id=${o["workspace-file"][0].$.id}` +
+                           // `&` +
+                           // `&lastModified=${new Date(o["workspace-file"][0].$.date).getTime()}`
+                           ;
+         versionsUrl =  `${origin}/lsaf/api/workspace/files${o["workspace-file"][0]._}?component=versions` // +
+                           // `&id=${o["workspace-file"][0].$.id}` +
+                           // `&` +
+                           // `&lastModified=${new Date(o["workspace-file"][0].$.date).getTime()}`
+                           ;
+      } else {
+         debugger;
+         console.log('(getUrlFromManifest) unexpected Object.keys(o):', Object.keys(o));
+         console.log('o:', o);
+      }
       let exists = false;
       try {
-         const headResponse = await axios.head(headUrl, { headers: { "X-Auth-Token": this.authToken }, maxRedirects: 5 });
-         if (headResponse.status === 200) {
-            exists = true;
+         //headResponse = await axios.head(headUrl, { headers: { "X-Auth-Token": this.authToken }, maxRedirects: 5 });
+         //if (headResponse.status === 200) {
+            // exists = true;
+         properties = await axios.get(propertiesUrl, { headers: { "X-Auth-Token": this.authToken }, maxRedirects: 5 });
+         if (properties.status === 200) {
+            if (properties?.data?.id === id && properties?.data?.lastModified === date) {
+               exists = true;
+               versioned = properties.data.versioned;
+               console.log('versioned:', versioned);
+               if (versioned) {
+                  const versions = await axios.get(versionsUrl, { headers: { "X-Auth-Token": this.authToken }, maxRedirects: 5 });
+                  console.log('versions:', versions);
+                  const v = versions.data.filter(v => v?.id === id)[0];
+                  version = v?.version || '';
+                  console.log('version:', v);
+                  debugger ;
+                  console.log('version:', version);
+               } else {
+                  version = "";
+               }
+               if (version) contentsUrl = contentsUrl + `&version=${version}`
+            }
+            console.log('properties:', properties);
+            console.log('');
          }
       } catch(error) {
          if (error.code === "ECONNRESET" && retry > 0) {
             retry = retry -1;
             this.logon();
-            return this.getUrlFromManifestItem(o, retry);
+            return this.getUrlFromManifestItem(o, origin, retry);
          } else {
-            debugger;
-            console.log(error);
+            //debugger;
+            console.log('(getUrlFromManifestItem) error:', error.message);
          }
       }
       return {contentsUrl, exists};
+   }
+
+   async parseManifestXml (xmldata) {
+      let manifestContent, manifestOutputs, manifestLog, manifestLst, manifestInputs, manifestInputExternalRefs;
+      let manifestOutputExternalRefs, manifestPrograms, manifestParameters, manifestMetrics, submission, data;
+      let location;
+      if (/\/repo\//.test(this.config.remoteEndpoint.url)) {
+         location = 'repository';
+      } else if (/\/work\//.test(this.config.remoteEndpoint.url)) {
+         location = 'workspace';
+      }
+      const getUrl = async o => ({
+         path: o["repository-file"][0]._,
+         ...o["repository-file"][0].$,
+         ...(await this.getUrlFromManifestItem(o, `https://${this.host}`))
+      });
+      manifestContent = await this.parseXmlString(xmldata); 
+      console.log('manifestContent:', manifestContent);
+      if (manifestContent.manifest) {
+         manifestOutputs = manifestContent.manifest.outputs[0].file.map(o => ({
+           ...o.$,
+           path: new URL(o.$.uri).pathname,
+           contentsUrl: `https://${this.host}/lsaf/api/${location}/files${new URL(o.$.uri).pathname}?component=contents`
+         }));
+         console.log('manifestOutputs:', manifestOutputs);
+         manifestInputs = manifestContent.manifest.inputs[0].file.map(o => ({
+           ...o.$,
+           path: new URL(o.$.uri).pathname,
+           contentsUrl: `https://${this.host}/lsaf/api/${location}/files${new URL(o.$.uri).pathname}?component=contents`
+         }));
+         console.log('manifestInputs:', manifestInputs);
+         manifestPrograms = manifestContent.manifest.tasks[0].file.map(o => ({
+            ...o.$,
+            path: new URL(o.$.uri).pathname,
+            contentsUrl: `https://${this.host}/lsaf/api/${location}/files${new URL(o.$.uri).pathname}?component=contents`
+         }));
+         console.log('manifestPrograms:', manifestPrograms);
+         manifestLog = {
+            ...manifestContent.manifest.log[0].$,
+            contentsUrl: `https://${this.host}/lsaf/api/${location}/files${new URL(manifestContent.manifest.log[0].$.uri).pathname}?component=contents`
+         }
+         console.log('manifestLog:', manifestLog);
+         manifestLst = {
+            ...manifestContent.manifest.lst[0].$,
+            contentsUrl: `https://${this.host}/lsaf/api/${location}/files${new URL(manifestContent.manifest.lst[0].$.uri).pathname}?component=contents`
+         }
+         console.log('manifestLst:', manifestLst);
+         data = {
+            submission,
+            metrics: manifestMetrics,
+            programs: manifestPrograms,
+            parameters: manifestParameters,
+            log: manifestLog,
+            lst: manifestLst,
+            outputs: manifestOutputs,
+            outputExternalRefs: manifestOutputExternalRefs,
+            inputs: manifestInputs,
+            inputExternalRefs: manifestInputExternalRefs
+         }
+       } else {
+         manifestOutputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].outputs[0].output.map(getUrl))).map(o => o.value);
+         console.log('manifestOutputs:', manifestOutputs);
+         manifestLog = (await Promise.allSettled(manifestContent["job-manifest"].job[0].logs[0].log.map(getUrl))).map(o => o.value)[0];
+         console.log('manifestLog:', manifestLog);
+         manifestLst = (await Promise.allSettled(manifestContent["job-manifest"].job[0].results[0].result.map(getUrl))).map(o => o.value)[0];
+         console.log('manifestLst:', manifestLst);
+         manifestInputs = (await Promise.allSettled(manifestContent["job-manifest"].job[0].inputs[0].input.map(getUrl)))
+            .map(o => o.value)
+            .filter(o => o != null)
+            ;
+         manifestInputExternalRefs = manifestContent["job-manifest"].job[0].inputs[0]["external-ref"].map(p => p.$);
+         manifestOutputExternalRefs = manifestContent["job-manifest"].job[0].outputs[0]["external-ref"].map(p => p.$);
+         console.log('manifestInputs:', manifestInputs);
+         manifestPrograms = (await Promise.allSettled(manifestContent["job-manifest"].job[0].programs[0].program.map(getUrl))).map(o => o.value);
+         console.log('manifestPrograms:', manifestPrograms);
+         manifestParameters = {};
+         for (const key in manifestContent["job-manifest"].job[0].parameters[0]) {
+            manifestParameters = { 
+            ...manifestParameters,
+            [key]: manifestContent["job-manifest"].job[0].parameters[0][key].map(p => ({...p.$, value: p._ || ''}))}
+         }
+         manifestMetrics = {
+            transferMetrics: manifestContent["job-manifest"].metrics[0].transferMetrics[0].transferMetric.map(p => p.$)
+         };
+         submission = {
+            ...manifestContent["job-manifest"]["job-submission"][0].$,
+            ...manifestContent["job-manifest"]["job-submission"].reduce((acc, p) => {
+                  Object.keys(p).forEach(k => {
+                     if (k !== '$') {
+                     acc = { ...acc, [k]: p[k][0]}
+                     }
+                  })
+                  return acc;
+               }, {})
+            };
+         delete submission.$;
+         data = {
+            jobPath: manifestContent["job-manifest"].job[0]['repository-file'][0]._,
+            ...manifestContent["job-manifest"].job[0]['repository-file'][0].$,
+            "job-manifest-version": manifestContent["job-manifest"].$.version,
+            type: manifestContent["job-manifest"].type[0],
+            ...(['owner', 'run-as-owner', 'description'].reduce((acc, key) => {
+               acc = {...acc, [key]: manifestContent["job-manifest"].job[0][key][0]}
+               return acc;
+            }, {})),
+            ...manifestContent["job-manifest"].$,
+            submission,
+            metrics: manifestMetrics,
+            programs: manifestPrograms,
+            parameters: manifestParameters,
+            log: manifestLog,
+            lst: manifestLst,
+            outputs: manifestOutputs,
+            outputExternalRefs: manifestOutputExternalRefs,
+            inputs: manifestInputs,
+            inputExternalRefs: manifestInputExternalRefs
+         };
+      }
+      return data;
    }
 
 } // End of Class RestApi definition
