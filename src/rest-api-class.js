@@ -1181,13 +1181,13 @@ class RestApi {
             if (/^application\/x-sas-data(;|$)/.test(this.fileContentType)) {
                const data = await read_sas(tempFile.name);
                console.log(beautify(JSON.stringify(data)));
-               showTableView(`Imported SAS data from ${confLabel} remote file: ${this.remoteFile}`, data);
+               showTableView(`Imported SAS data from ${confLabel} remote file: ${this.remoteFile}`, data, this.context);
                showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from ${confLabel} remote file: ${this.remoteFile}`);
             }
             if (/^application\/x-sas-xport(;|$)/.test(this.fileContentType)) {
                const data = await read_xpt(tempFile.name);
                console.log(beautify(JSON.stringify(data)));
-               showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data);
+               showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data, this.context);
                showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from ${confLabel} remote file: ${this.remoteFile}`);
             }
             openFile(vscode.Uri.file(tempFile.name));
