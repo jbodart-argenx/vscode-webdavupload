@@ -158,8 +158,9 @@ async function localFolderContents(param, context) {
 console.log('typeof localFolderContents:', typeof localFolderContents);
 
 
-
-async function showFolderView(folderPath, folderContents, isLocal, config, context) {
+// eslint-disable-next-line require-await
+// async 
+function showFolderView(folderPath, folderContents, isLocal, config, context) {
    console.log('(showFolderView) folderPath:', folderPath);
    console.log('(showFolderView) isLocal:', isLocal)
    console.log('(showFolderView) folderPath:', folderPath);
@@ -862,7 +863,8 @@ console.log('typeof compareFolderContents:', typeof compareFolderContents);
 
 
 
-async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, folder1Config, folder2Path, isFolder2Local, folder2Config, context) {
+//async 
+function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, folder1Config, folder2Path, isFolder2Local, folder2Config, context) {
 
    const panel = vscode.window.createWebviewPanel(
       "folderContents",  // webview identifier
