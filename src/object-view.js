@@ -1,7 +1,15 @@
 const vscode = require("vscode");
+const os = require('os');
 
 // This is the async function that opens a webview and displays an object / collects edits from the user
-async function getObjectView(inputObject = {}, editable = false, title = "Object Viewer", titleShort = "Object Viewer") {
+// eslint-disable-next-line require-await
+async function getObjectView(
+   inputObject = {},
+   editable = false,
+   title = "Object Viewer",
+   titleShort = "Object Viewer",
+   restApi = null
+) {
    return new Promise((resolve, reject) => {
       // Create and show a new webview panel
       const panel = vscode.window.createWebviewPanel(
@@ -20,6 +28,7 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
       panel.webview.onDidReceiveMessage(
          message => {
             let updatedObject;
+            let url, newRestApi;
             switch (message.command) {
                case 'submit':
                      updatedObject = undefined;
@@ -51,6 +60,41 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                   reject("Cancelled");
                   panel.dispose(); // Close the webview panel
                break;
+               case('openLink'):
+                  debugger ;
+                  try {
+                     url = new URL(message.url);
+                     console.log('openLink:', url.href);
+                     debugger ;
+                     if (restApi && typeof restApi.constructor === 'function' && restApi.logon && restApi.getRemoteFileContents && restApi.viewFileContents) {
+                        let host = url.hostname;
+                        if (! /^\w+(-\w+)?\.ondemand\.sas\.com$/.test(host)) {
+                           host = restApi.host;
+                        } 
+                        let username = restApi.username || os.userInfo().username;
+                        newRestApi = new restApi.constructor(username, host);
+                        newRestApi.authToken = restApi.authToken;
+                        newRestApi.logon();
+                        const requestOptions = {
+                           headers: {
+                              "X-Auth-Token": newRestApi.authToken
+                           },
+                           maxRedirects: 5 // Optional, axios follows redirects by default
+                        };
+                        newRestApi.downloadFile(url, requestOptions).then(p => {
+                           debugger ;
+                           console.log('newRestApi.downloadFile() returned:', p); 
+                           newRestApi.viewFileContents();
+                           return;
+                        }
+                        ).catch(err => {
+                           console.log(err);
+                        })
+                     }
+                  } catch (error) {
+                     console.log('(openLink) Error:', error);
+                  }
+               break;
                default:
                   debugger;
                   console.log('(getObjectView) Rejecting Promise for unexpected message:', message);
@@ -75,7 +119,8 @@ function alignValue(value) {
    try{
       value = Number(value);
       return value ? ' text-align : right;' : '';
-   } catch (_){
+   } catch (err){
+      console.log('(alignValue) value=', value, ' -> Error:', err);
       return '';
    }
 }
@@ -85,7 +130,8 @@ function showValue(value) {
    try {
       const urlValue = new URL(value);
       return `<a href="${urlValue.href}">${valueStr}</a>`;
-   } catch (_) {
+   } catch (err) {
+      console.log('(showValue) value:', value, '-> Error:', err);
       return valueStr;
    }
 }
@@ -147,6 +193,17 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                   const updatedObject = ${editable ? 'gatherFormData()' : 'null'};
                   vscode.postMessage({
                      command: 'cancel'
+                  });
+               });
+
+               
+               document.querySelectorAll('a').forEach(link => {
+                  link.addEventListener('click', event => {
+                     event.preventDefault();
+                     vscode.postMessage({
+                        command: 'openLink',
+                        url: link.href
+                     });
                   });
                });
 
@@ -394,7 +451,7 @@ function generateArrayTable(arr, editable, parentKey = '') {
    return html;
 }
 
-
+console.log('(object-view.js) typeof getObjectView:', typeof getObjectView);
 
 // Export the function so it can be imported in other files
 module.exports = {

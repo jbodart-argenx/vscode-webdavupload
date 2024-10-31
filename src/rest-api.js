@@ -171,13 +171,13 @@ async function restApiDownloadFolderAsZip(param, config = null, expand = null, o
    let saveAs, statusMessage;
    const restApi = new RestApi();
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      param = vscode.Uri.parse(param.replace(/[\\/]$/, ''));
    }
    try {
       if (config && config.localRootPath && config.remoteEndpoint) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
-            restApi.localFile = param.fsPath;
+            restApi.localFile = param;
             // restApi.localFileStat = await vscode.workspace.fs.stat(param);
             restApi.getRemoteFilePath();   // get Remote File Path
          }
@@ -189,6 +189,8 @@ async function restApiDownloadFolderAsZip(param, config = null, expand = null, o
             return;
          }
       }
+      const defaultUri = vscode.Uri.joinPath(param, '..', `${param.path.replace(/\/$/, '').split('/').pop()}.zip`);
+      console.log('(restApiDownloadFolderAsZip) defaultUri:', defaultUri);
       if (expand == null) {
          // Open the "Save As" dialog
          expand = await vscode.window.showSaveDialog({
@@ -198,7 +200,7 @@ async function restApiDownloadFolderAsZip(param, config = null, expand = null, o
                'Zip Files': ['zip'],
                'All Files': ['*']
             },
-            defaultUri: vscode.Uri.file(`${param}.zip`)
+            defaultUri: defaultUri
          });
          saveAs = !!expand;
       }
@@ -208,43 +210,57 @@ async function restApiDownloadFolderAsZip(param, config = null, expand = null, o
       if (zipFile) {
          if (expand) {
             if (expand === true) {
-               expand = vscode.Uri.file(restApi.localFile);
+               expand = restApi.localFile;
             } 
             if (typeof expand === 'string') {
-               expand = vscode.Uri.file(expand);
+               expand = vscode.Uri.parse(expand);
             }
             if (expand instanceof vscode.Uri) {
                // Save to specified file/folder
                try {
-                  const lstat = fs.lstatSync(expand.fsPath);
-                  if (lstat.isDirectory()) {
+                  // const lstat = fs.lstatSync(expand.fsPath);
+                  const lstat = await vscode.workspace.fs.stat(expand);
+                  if (lstat.type === vscode.FileType.Directory) {
                      statusMessage = vscode.window.setStatusBarMessage('Extracting...');
-                     await extractZip(zipFile, path.dirname(expand.fsPath), overwrite);
-                     console.log(`(restApiDownloadFolderAsZip) Temporary Zip file ${zipFile} was extracted successfully to folder ${expand.fsPath}`);
-                     vscode.window.showInformationMessage(`Temporary Zip file extracted successfully to folder ${expand.fsPath}`);
-                  } else if (lstat.isFile()) {
-                     if (zipFile !== expand.fsPath) {
+                     const expandFolder = vscode.Uri.joinPath(expand, '..');
+                     // await extractZip(zipFile, path.dirname(expand.fsPath), overwrite);
+                     await extractZip(zipFile, expandFolder, overwrite);
+                     console.log(`(restApiDownloadFolderAsZip) Temporary Zip file ${zipFile} was extracted successfully to folder ${expandFolder}`);
+                     vscode.window.showInformationMessage(`Temporary Zip file extracted successfully to folder ${expandFolder}`);
+                  } else if (lstat.type === vscode.FileType.File) {
+                     if (zipFile.toString() !== expand.toString() && `file://${zipFile.toString()}` !== expand.toString()) {
                         statusMessage = vscode.window.setStatusBarMessage('Saving...');
-                        await fs.promises.copyFile(zipFile, expand.fsPath, overwrite ? null : fs.constants.COPYFILE_EXCL);
-                        console.log(`Temporary Zip file ${zipFile} was copied successfully to file ${expand.fsPath}`);
-                        vscode.window.showInformationMessage(`Temporary Zip file ${zipFile} was copied successfully to file ${expand.fsPath}`);
+                        const zipFileUri = (zipFile instanceof vscode.Uri) ? zipFile : vscode.Uri.parse(zipFile);
+                        // await fs.promises.copyFile(zipFile, expand.fsPath, overwrite ? null : fs.constants.COPYFILE_EXCL);
+                        try {
+                           await vscode.workspace.fs.copy(zipFileUri, expand, { overwrite: overwrite });
+                           console.log(`File copied from ${zipFileUri} to ${expand}`);
+                        } catch (error) {
+                           console.error(`Failed to copy file: ${error.message}`);
+                        }
+                        console.log(`Temporary Zip file ${zipFile} was copied successfully to file ${expand}`);
+                        vscode.window.showInformationMessage(`Temporary Zip file ${zipFile} was copied successfully to file ${expand}`);
                      }
                   }
                } catch (error) {
-                  if (error.code === 'ENOENT') {
+                  if (error.code === 'ENOENT' || error.code === 'FileNotFound') {
                      // expand.fsPath does not exist yet
                      try {
                         if (saveAs) {
                            // copy Temp zip file to selected file path
                            statusMessage = vscode.window.setStatusBarMessage('Saving...');
-                           await fs.promises.copyFile(zipFile, expand.fsPath, overwrite ? null : fs.constants.COPYFILE_EXCL);
-                           console.log(`Zip file successfully saved as ${expand.fsPath}`);
-                           vscode.window.showInformationMessage(`Zip file successfully saved as ${expand.fsPath}`);
+                           const zipFileUri = (zipFile instanceof vscode.Uri) ? zipFile : vscode.Uri.parse(zipFile);
+                           // await fs.promises.copyFile(zipFile, expand.fsPath, overwrite ? null : fs.constants.COPYFILE_EXCL);
+                           await vscode.workspace.fs.copy(zipFileUri, expand, { overwrite: overwrite });
+                           console.log(`Zip file successfully saved as ${expand}`);
+                           vscode.window.showInformationMessage(`Zip file successfully saved as ${expand}`);
                         } else {
                            statusMessage = vscode.window.setStatusBarMessage('Saving...');
-                           await extractZip(zipFile, path.dirname(expand.fsPath), overwrite);
-                           console.log(`Temporary Zip file ${zipFile} was extracted successfully to new folder ${expand.fsPath}`);
-                           vscode.window.showInformationMessage(`Temporary Zip file ${zipFile} was extracted successfully to new folder ${expand.fsPath}`);
+                           const expandFolder = vscode.Uri.joinPath(expand, '..');
+                           //await extractZip(zipFile, path.dirname(expand.fsPath), overwrite);
+                           await extractZip(zipFile, expandFolder, overwrite);
+                           console.log(`Temporary Zip file ${zipFile} was extracted successfully to new folder ${expandFolder}`);
+                           vscode.window.showInformationMessage(`Temporary Zip file ${zipFile} was extracted successfully to new folder ${expandFolder}`);
                         }
                      } catch(error) {
                         console.log(`Error extracting from zip file: ${error.message}`);
@@ -304,7 +320,11 @@ console.log('typeof restApiDownload:', typeof restApiDownload);
 
 // restApiView
 
-async function restApiView(param, config = null) {
+async function restApiView(param, config = null, expectedMd5sum = null) {
+   console.log('\n=== restApiView ===');
+   console.log('(restApiView) param:', param);
+   console.log('(restApiView) config:', config);
+   console.log('(restApiView) expectedMd5sum:', expectedMd5sum);
    const restApi = new RestApi();
    if (typeof param === 'string') {
       param = vscode.Uri.file(param);
@@ -314,9 +334,11 @@ async function restApiView(param, config = null) {
          restApi.config = config;
          if (param instanceof vscode.Uri) {
             console.log('(restApiView) param:', param);
-            restApi.localFile = param.fsPath;
+            restApi.localFile = param;
+            console.log('(restApiView) restApi.localFile:', restApi.localFile);
             // restApi.localFileStat = await vscode.workspace.fs.stat(param);
             restApi.getRemoteFilePath();   // get Remote File Path
+            console.log('(restApiView) restApi.remoteFile:', restApi.remoteFile);
          }
       } else {
          await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
@@ -325,12 +347,20 @@ async function restApiView(param, config = null) {
          if (!restApi.config) {
             return;
          }
+         console.log('(restApiView) restApi.localFile:', restApi.localFile);
+         console.log('(restApiView) restApi.remoteFile:', restApi.remoteFile);
       }
-      await restApi.getRemoteFileContents();
+      // param: any, pick_multiple?: boolean, expectedMd5sum?: null
+      // await restApi.getRemoteFileContents();
+      await restApi.getRemoteFileContents(undefined, false, expectedMd5sum);
+      console.log('restApi.fileContents?.length:', restApi.fileContents?.length);
       await restApi.viewFileContents();
    } catch (err) {
+      debugger;
       console.log(err);
    }
+   // debugger ;
+   console.log('Done === restApiView ===\n');
 }
 console.log('typeof restApiView:', typeof restApiView);
 
@@ -398,7 +428,7 @@ async function restApiVersions(param) {
       if (!restApi.config) {
          return;
       }
-      await restApi.getRemoteFileVersions();
+      await restApi.getRemoteFileVersions(param);
       let versions = restApi.fileVersions;
       if (typeof versions === 'object') {
          versions = beautify(JSON.stringify(versions), {
