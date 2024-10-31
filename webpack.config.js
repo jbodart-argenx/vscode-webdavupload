@@ -62,6 +62,10 @@ plugins: [
          from: 'vfs',
          to: 'vfs',
       },
+      { 
+         from: 'webr-repo',
+         to: 'webr-repo'
+      }
       ],
    }),
 ],
