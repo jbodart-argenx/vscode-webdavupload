@@ -379,13 +379,13 @@ async function showFolderView(folderPath, folderContents, isLocal, config) {
                                  break;
                               case '.sas7bdat':
                                  data = await read_sas(message.filePath);
-                                 console.log(beautify(JSON.stringify(data)));
+                                 // console.log(beautify(JSON.stringify(data)));
                                  showTableView(`Imported SAS data from local file: ${message.filePath}`, data);
                                  showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
                                  break;
                               case '.xpt':
                                  data = await read_xpt(message.filePath);
-                                 console.log(beautify(JSON.stringify(data)));
+                                 // console.log(beautify(JSON.stringify(data)));
                                  showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data);
                                  showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
                                  break;
@@ -1093,13 +1093,13 @@ async function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Loc
                            break;
                         case '.sas7bdat':
                            data = await read_sas(message.filePath);
-                           console.log(beautify(JSON.stringify(data)));
+                           // console.log(beautify(JSON.stringify(data)));
                            showTableView(`Imported SAS data from local file: ${message.filePath}`, data);
                            showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
                            break;
                         case '.xpt':
                            data = await read_xpt(message.filePath);
-                           console.log(beautify(JSON.stringify(data)));
+                           // console.log(beautify(JSON.stringify(data)));
                            showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data);
                            showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
                            break;
