@@ -1,6 +1,9 @@
 const vscode = require("vscode");
 
 // This is the async function that opens a webview and collects multi-line input from the user
+// Even though the function does not use await, marking a function as async ensures it returns a promise.
+// This can be useful if the function needs to be used in a context where a promise is expected.
+// eslint-disable-next-line require-await
 async function getMultiLineText(defaultValue = '') {
    return new Promise((resolve, reject) => {
       // Create and show a new webview panel
@@ -37,6 +40,9 @@ async function getMultiLineText(defaultValue = '') {
 
 
 // This is the async function that opens a webview and collects multi-line input from the user
+// Even though the function does not use await, marking a function as async ensures it returns a promise.
+// This can be useful if the function needs to be used in a context where a promise is expected.
+// eslint-disable-next-line require-await
 async function showMultiLineText(textValue = '', title="Text Content", header="", buttonLabel="Dismiss", preserveWiteSpace = true) {
    const editable=false;
    return new Promise((resolve, reject) => {
@@ -97,12 +103,13 @@ function getWebviewContent(defaultValue, title="File Upload Comment", header=und
                height: 100vh;
                box-sizing: border-box;
                font-family: ${preserveWiteSpace ? 'monospace;' : 'sans-serif'};
-               ${preserveWiteSpace && 'white-space: pre;'}
+               ${preserveWiteSpace && 'white-space: pre-wrap;'}
             }
             textarea {
                flex: 1;
                box-sizing: border-box;
-               font-family: sans-serif;
+               font-family: ${preserveWiteSpace ? 'monospace;' : 'sans-serif'};
+               ${preserveWiteSpace && 'white-space: pre-wrap;'}
             }
             .controls {
                margin-top: 10px;
