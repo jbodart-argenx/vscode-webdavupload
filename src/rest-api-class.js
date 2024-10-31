@@ -15,9 +15,9 @@ const { pipeline } = require('stream/promises'); // Node.js v15+ only
 const { showMultiLineText } = require('./multiLineText.js');
 const { showTableView } = require('./json-table-view.js');
 const { read_sas, read_xpt } = require('./read_sas.js');
-const axios = require('axios');
 const xml2js = require('xml2js');
 const { getObjectView } = require("./object-view.js");
+const { axios } = require("./axios-cookie-jar.js");
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
 
