@@ -63,7 +63,21 @@ async function initWebR(webR, repo) {
 
 async function read_sas(sas7bdatFile, rows = 'TRUE', cols = 'TRUE'){
    let datadir = path.dirname(sas7bdatFile);
-   console.log('datadir:', datadir);
+   console.log('(read_sas) datadir:', datadir);
+   if (!webR) {
+      try {
+         webR = await initWebR(webR);
+      } catch (error) {
+         console.warn('(read_sas): Failed to initialize webR, cannot read SAS dataset', sas7bdatFile);
+         debugger;
+      return;
+      }
+   }
+   if (!webR){
+      console.warn('(read_sas): Failed to initialize webR, cannot read SAS dataset', sas7bdatFile);
+      debugger;
+      return;
+   }
    await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
    // await webR.evalR(`data <- haven::read_sas("/data/${path.basename(sas7bdatFile)}")`);
    let data_json = await webR.evalR(`jsonlite::toJSON(haven::read_sas("/data/${path.basename(sas7bdatFile)}")[${rows},${cols}])`);
