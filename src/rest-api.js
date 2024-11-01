@@ -430,7 +430,7 @@ async function restApiViewManifest(param, context) {
          return;
       }
       let mnfData, xmlData;
-      debugger;
+      // debugger ;
       try {
          if (param instanceof vscode.Uri) {
             // The vscode.workspace.fs.readFile method returns a Uint8Array, so we need to convert it to a string before parsing it as JSON.
