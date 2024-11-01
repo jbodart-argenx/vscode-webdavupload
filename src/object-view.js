@@ -1,12 +1,21 @@
 const vscode = require("vscode");
-const os = require('os');
+const fs = require('fs');
 
 const { authTokens } = require('./auth.js');
 const beautify = require('js-beautify');
 const { axios } = require("./axios-cookie-jar.js");
 const { showMultiLineText } = require("./multiLineText.js");
+const { openFileWithMatchingProvider } = require("./openFile.js");
+const { streamToPromise } = require('./stream.js');
+const { pipeline } = require('stream/promises'); // Node.js v15+ only
+const tmp = require("tmp");
+tmp.setGracefulCleanup();   // remove all controlled temporary objects on process exit
+
 
 // This is the async function that opens a webview and displays an object / collects edits from the user
+// Even though the function does not use await, marking a function as async ensures it returns a promise.
+// This can be useful if the function needs to be used in a context where a promise is expected.
+// eslint-disable-next-line require-await
 async function getObjectView(inputObject = {}, editable = false, title = "Object Viewer", titleShort = "Object Viewer", context, restApi) {
    return new Promise((resolve, reject) => {
       // Create and show a new webview panel
@@ -26,7 +35,6 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
       panel.webview.onDidReceiveMessage(
          async message => {
             let updatedObject;
-            let url, newRestApi;
             switch (message.command) {
                case 'submit':
                      updatedObject = undefined;
@@ -59,51 +67,75 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                   panel.dispose(); // Close the webview panel
                break;
                case 'openUrl':
-                  // debugger ;
-                  console.log('(getObjectView) openUrl: message.url = ', message.url);
-                  let response;
-                  let headers = {};
-                  await restApi.logon();
-                  let authToken = authTokens[new URL(message.url).hostname];
-                  const basicAuth = (restApi.username && restApi.encryptedPassword) ?
-                     "Basic " + Buffer.from(restApi.username + ":" + restApi.encryptedPassword).toString('base64') :
-                     undefined;
-                  if (authToken) {
-                     headers["X-Auth-Token"] = authToken;
-                  } else {
-                     headers["Authorization"] =  basicAuth;
+                  {
+                     // debugger ;
+                     console.log('(getObjectView) openUrl: message.url = ', message.url);
+                     let response;
+                     let headers = {};
+                     await restApi.logon();
+                     let authToken = authTokens[new URL(message.url).hostname];
+                     const basicAuth = (restApi.username && restApi.encryptedPassword) ?
+                        "Basic " + Buffer.from(restApi.username + ":" + restApi.encryptedPassword).toString('base64') :
+                        undefined;
+                     if (authToken) {
+                        headers["X-Auth-Token"] = authToken;
+                     } else {
+                        headers["Authorization"] =  basicAuth;
+                     }
+                     try {
+                        response = await axios.get(message.url,
+                           {
+                              headers: headers,
+                              maxRedirects: 5 // Optional, axios follows redirects by default
+                           });
+                           console.log('(getObjectView) openUrl: axios response status:', response.status, 'content-type:', response.headers['content-type']);
+                           if (response?.data) {
+                              showMultiLineText(
+                                 typeof response.data === 'string' ?
+                                    response.data :
+                                    beautify(JSON.stringify(response.data)),
+                                 `${message.url}`,  // title
+                                 `${message.url}`,  // heading
+                                 "Dismiss",         // buttonLabel
+                                 true               // preserveWiteSpace
+                              );
+                              let fileExt = new URL(message.url).pathname.replace(/\/$/, '').split('/').pop().split('.').pop();
+                              if (fileExt) fileExt = `.${fileExt}`;
+                              const tempFile = tmp.fileSync({ postfix: fileExt, discardDescriptor: true });
+                              // Create a writable stream to save the file
+                              const fileStream = fs.createWriteStream(tempFile.name);
+                              if (pipeline){
+                                 await pipeline(response.data, fileStream); // Automatically handles errors (Node.js v15+)
+                              } else {
+                                 // Pipe the response stream directly to the file
+                                 response.data.pipe(fileStream);
+                                 // Await the 'finish' and 'error' events using a helper function
+                                 await streamToPromise(fileStream);
+                              }
+                              // Set the file to read-only (cross-platform)
+                              try {
+                                 await fs.promises.chmod(tempFile.name, 0o444);
+                                 console.log(`File is now read-only: ${tempFile.name}`);
+                              } catch (err) {
+                                 console.error(`Failed to set file as read-only: ${err}`);
+                              }
+                              console.log(`(getObjectView) Calling openFileWithMatchingProvider(${tempFile.name}) ...`);
+                              openFileWithMatchingProvider(tempFile.name);
+                           } else {
+                              console.log('axios response:\n', response);
+                           }
+                     } catch (error) {
+                        debugger;
+                        console.log('(getObjectView) openUrl error:', error.message);
+                     }
+                     // // Handle the URL, e.g., open it in a browser
+                     // try {
+                     //    vscode.env.openExternal(vscode.Uri.parse(message.url));
+                     // } catch (error) {
+                     //    debugger;
+                     //    console.log(error);
+                     // }
                   }
-                  try {
-                     response = await axios.get(message.url,
-                        {
-                           headers: headers,
-                           maxRedirects: 5 // Optional, axios follows redirects by default
-                        });
-                        console.log('axios response status:', response.status, 'content-type:', response.headers['content-type']);
-                        if (response?.data) {
-                           showMultiLineText(
-                              typeof response.data === 'string' ?
-                                 response.data :
-                                 beautify(JSON.stringify(response.data)),
-                              `${message.url}`,  // title
-                              `${message.url}`,  // heading
-                              "Dismiss",         // buttonLabel
-                              true               // preserveWiteSpace
-                           );
-                        } else {
-                           console.log('axios response:\n', response);
-                        }
-                  } catch (error) {
-                     debugger;
-                     console.log('(getObjectView) openUrl error:', error.message);
-                  }
-                  // // Handle the URL, e.g., open it in a browser
-                  // try {
-                  //    vscode.env.openExternal(vscode.Uri.parse(message.url));
-                  // } catch (error) {
-                  //    debugger;
-                  //    console.log(error);
-                  // }
                   break;
                default:
                   debugger;
@@ -209,15 +241,6 @@ function getWebviewContent(inputObject, editable = false, title = "Object Viewer
                });
 
                
-               document.querySelectorAll('a').forEach(link => {
-                  link.addEventListener('click', event => {
-                     event.preventDefault();
-                     vscode.postMessage({
-                        command: 'openLink',
-                        url: link.href
-                     });
-                  });
-               });
 
                document.body.addEventListener('click', function(event) {
                   event.preventDefault();
