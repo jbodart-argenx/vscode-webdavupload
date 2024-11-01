@@ -4,11 +4,11 @@ const { authTokens } = require('./auth.js');
 const { axios } = require("./axios-cookie-jar.js");
 
 // eslint-disable-next-line require-await
-async function showTableView(tableViewTitle, data, context, retainContextWhenHidden = true) {
+async function showTableView(tableViewTitle, data, context, webViewTitle = "Table View", retainContextWhenHidden = true) {
 
    const panel = vscode.window.createWebviewPanel(
       "tableView",
-      "Table View",
+      webViewTitle,
       vscode.ViewColumn.One,
       {
          enableScripts: true, // Allow running JavaScript in the Webview
