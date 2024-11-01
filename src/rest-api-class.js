@@ -12,7 +12,7 @@ const FormData = require('form-data');
 const { Readable } = require('stream');
 const { streamToPromise } = require('./stream.js');
 const { pipeline } = require('stream/promises'); // Node.js v15+ only
-const { showMultiLineText } = require('./multiLineText.js');
+// const { showMultiLineText } = require('./multiLineText.js');
 const { showTableView } = require('./json-table-view.js');
 const { read_sas, read_xpt } = require('./read_sas.js');
 const xml2js = require('xml2js');
@@ -1327,8 +1327,9 @@ class RestApi {
                   console.log(error);
                }
                console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
-               await showTableView(`Imported SAS data from ${confLabel} remote file: ${this.remoteFile}`, data);
-               await showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from ${confLabel} remote file: ${this.remoteFile}`);
+               await showTableView(`Imported SAS data from ${confLabel} remote file: ${this.remoteFile}`, data,
+                                    undefined, `${this.remoteFile}`.split(/[/\\]/).pop()+` (${confLabel})`);
+               // await showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from ${confLabel} remote file: ${this.remoteFile}`);
                // openFile(vscode.Uri.file(tempFile.name));
             }
             if (/^application\/x-sas-xport(;|$)/.test(this.fileContentType)) {
@@ -1341,8 +1342,9 @@ class RestApi {
                   console.log(error);
                }
                console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
-               await showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data);
-               await showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from ${confLabel} remote file: ${this.remoteFile}`);
+               await showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data,
+                  undefined, `${this.remoteFile}`.split(/[/\\]/).pop()+` (${confLabel})`);
+               // await showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from ${confLabel} remote file: ${this.remoteFile}`);
                // openFile(vscode.Uri.file(tempFile.name));
             }
          } else {
