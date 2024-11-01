@@ -1,6 +1,5 @@
 const vscode = require("vscode");
 const fs = require('fs');
-
 const { authTokens } = require('./auth.js');
 const beautify = require('js-beautify');
 const { axios } = require("./axios-cookie-jar.js");
@@ -8,9 +7,10 @@ const { showMultiLineText } = require("./multiLineText.js");
 const { openFileWithMatchingProvider } = require("./openFile.js");
 const { streamToPromise } = require('./stream.js');
 const { pipeline } = require('stream/promises'); // Node.js v15+ only
+const { showTableView } = require("./json-table-view.js");
+const { read_sas, read_xpt } = require("./read_sas.js");
 const tmp = require("tmp");
 tmp.setGracefulCleanup();   // remove all controlled temporary objects on process exit
-
 
 // This is the async function that opens a webview and displays an object / collects edits from the user
 // Even though the function does not use await, marking a function as async ensures it returns a promise.
@@ -70,7 +70,9 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                   {
                      // debugger ;
                      console.log('(getObjectView) openUrl: message.url = ', message.url);
-                     let response;
+                     let response, data, contentType, contentLength, transferEncoding, responseType;
+                     let fileExt = new URL(message.url).pathname.replace(/\/$/, '').split('/').pop().split('.').pop();
+                     if (fileExt) fileExt = `.${fileExt}`;
                      let headers = {};
                      await restApi.logon();
                      let authToken = authTokens[new URL(message.url).hostname];
@@ -86,10 +88,91 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                         response = await axios.get(message.url,
                            {
                               headers: headers,
-                              maxRedirects: 5 // Optional, axios follows redirects by default
-                           });
-                           console.log('(getObjectView) openUrl: axios response status:', response.status, 'content-type:', response.headers['content-type']);
-                           if (response?.data) {
+                              maxRedirects: 5, // Optional, axios follows redirects by default
+                              responseType: 'stream'
+                           }
+                        );
+                        contentType = response?.headers['content-type'];
+                        contentLength = response?.headers['content-length'];
+                        transferEncoding = response.headers['transfer-encoding'];
+                        console.log(
+                           '(getObjectView) openUrl: axios response status:', response.status, 
+                           'content-type:', contentType, 'content-length:', contentLength, 'transferEncoding:', transferEncoding);
+                        if (response?.data) {
+                           try{
+                              data = await new Promise((resolve, reject) => {
+                                 const chunks = [];
+                                 let n_chunks = 0;
+                                 response.data.on('data', chunk => {
+                                    chunks.push(chunk);
+                                    n_chunks++;
+                                 });
+                                 response.data.on('end', () => {
+                                    console.log(`Received ${n_chunks} chunks, length: ${Buffer.concat(chunks).length}.`);
+                                    resolve(Buffer.concat(chunks));
+                                 });
+                                 response.data.on('error', error => {
+                                    reject(error);
+                                 });
+                              });
+                           } catch(err){
+                              debugger;
+                              console.log(err);
+                           }
+                           if (data) response.data = data;
+                           if (contentType.match(/\bjson\b/)) {
+                              responseType = 'json';
+                           }
+                           else if (responseType == null || contentLength < 100_000_000) {
+                              if (
+                                 /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|html|xhtml\+xml|sql))/.test(contentType) 
+                                 || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
+                                 || ( /^application\/octet-stream(;|$)/.test(contentType) &&
+                                       /^\.(txt|R?log|lst|sas|x?html?|xml|aspx|R|json)$/.test(fileExt)
+                                    )
+                              ) {
+                                 responseType = 'text';
+                              } else {
+                                 responseType = 'arraybuffer';
+                              }
+                           }
+                           if (response.status != 200) {
+                              let result;
+                              if (contentType.match(/\bjson\b/)) {
+                                 data = response.data;
+                                 if (data.message) {
+                                    result = data.details || data.message;
+                                    if (data.remediation && data.remediation !== "No remediation message is available.") {
+                                       result = `${result.trim()}, remediation: ${data.remediation}`;
+                                    }
+                                 } else {
+                                    result = beautify(JSON.stringify(data), {
+                                       indent_size: 2,
+                                       space_in_empty_paren: true,
+                                    });
+                                 }
+                              } else {
+                                 result = response.data;
+                                 result = `${response.status}, ${response.statusText}: Result: ${result}`;
+                              }
+                              response.data = result;
+                           } else {
+                              if (transferEncoding?.toLowerCase() === 'chunked' || contentLength < 500_000_000) {
+                                 if ( false
+                                    || /^(text\/|application\/(sas|(ld\+)?json|xml|javascript|html|xhtml\+xml|sql))/.test(contentType) 
+                                    || /^(application\/x-(sas|httpd-php|perl|python|markdown|quarto|latex))(;|$)/.test(contentType)
+                                    || responseType === 'text'
+                                 ) {
+                                    if (  response.data instanceof ArrayBuffer || 
+                                          response.data instanceof Buffer ||
+                                          responseType === 'text'
+                                       ) {
+                                       response.data =  new TextDecoder('utf-8').decode(response.data);
+                                    }
+                                 }
+                              }
+                           }
+                           if (responseType === 'text') {
                               showMultiLineText(
                                  typeof response.data === 'string' ?
                                     response.data :
@@ -99,31 +182,66 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                                  "Dismiss",         // buttonLabel
                                  true               // preserveWiteSpace
                               );
-                              let fileExt = new URL(message.url).pathname.replace(/\/$/, '').split('/').pop().split('.').pop();
-                              if (fileExt) fileExt = `.${fileExt}`;
+                           } else {
                               const tempFile = tmp.fileSync({ postfix: fileExt, discardDescriptor: true });
-                              // Create a writable stream to save the file
-                              const fileStream = fs.createWriteStream(tempFile.name);
-                              if (pipeline){
-                                 await pipeline(response.data, fileStream); // Automatically handles errors (Node.js v15+)
+                              if (response.data instanceof ArrayBuffer) {
+                                 // Create a writable stream to save the file
+                                 const fileStream = fs.createWriteStream(tempFile.name);
+                                 if (pipeline){
+                                    await pipeline(response.data, fileStream); // Automatically handles errors (Node.js v15+)
+                                 } else {
+                                    // Pipe the response stream directly to the file
+                                    response.data.pipe(fileStream);
+                                    // Await the 'finish' and 'error' events using a helper function
+                                    await streamToPromise(fileStream);
+                                 }
+                              } else if (response.data instanceof Buffer) {
+                                 try {
+                                    await vscode.workspace.fs.writeFile(vscode.Uri.file(tempFile.name), response.data);
+                                    console.log(`(getObjectView) openUrl: saved to temporary file: ${tempFile.name}`);
+                                 } catch (error) {
+                                    debugger;
+                                    console.log(`(getObjectView) openUrl: Failed to save file: ${error.message}`);
+                                 }
+                              } else if (typeof response.data === 'string') {
+                                 try {
+                                    await vscode.workspace.fs.writeFile(vscode.Uri.file(tempFile.name), Buffer.from(response.data));
+                                    console.log(`(getObjectView) openUrl: saved to temporary file: ${tempFile.name}`);
+                                 } catch (error) {
+                                    debugger;
+                                    console.log(`(getObjectView) openUrl: Failed to save file: ${error.message}`);
+                                 }
                               } else {
-                                 // Pipe the response stream directly to the file
-                                 response.data.pipe(fileStream);
-                                 // Await the 'finish' and 'error' events using a helper function
-                                 await streamToPromise(fileStream);
+                                 debugger;
+                                 console.log('(getObjectView) openUrl: Unexpected data type:', response.data)
                               }
                               // Set the file to read-only (cross-platform)
                               try {
                                  await fs.promises.chmod(tempFile.name, 0o444);
-                                 console.log(`File is now read-only: ${tempFile.name}`);
+                                 console.log(`(getObjectView) openUrl: Temporary file is now read-only: ${tempFile.name}`);
                               } catch (err) {
-                                 console.error(`Failed to set file as read-only: ${err}`);
+                                 console.error(`(getObjectView) openUrl: Failed to set file as read-only: ${err}`);
                               }
-                              console.log(`(getObjectView) Calling openFileWithMatchingProvider(${tempFile.name}) ...`);
-                              openFileWithMatchingProvider(tempFile.name);
-                           } else {
-                              console.log('axios response:\n', response);
+                              if (/^.(sas7bdat|xpt)$/.test(fileExt)) {
+                                 try {
+                                    if (fileExt === '.sas7bdat') {
+                                       data = await read_sas(tempFile.name);
+                                    } else {
+                                       data = await read_xpt(tempFile.name);
+                                    }
+                                    showTableView(`SAS data from: ${message.url}`, data, context);
+                                 } catch (error) {
+                                    console.warn(`Failed to open file with custom viewer: ${error.message}`);
+                                 }
+                              } else {
+                                 console.log(`(getObjectView) openUrl: Calling openFileWithMatchingProvider(${tempFile.name}) ...`);
+                                 const open_max = 1;
+                                 openFileWithMatchingProvider(tempFile.name, open_max);
+                              }
                            }
+                        } else {
+                           console.warn('(getObjectView) openUrl axios response:\n', response);
+                        }
                      } catch (error) {
                         debugger;
                         console.log('(getObjectView) openUrl error:', error.message);
