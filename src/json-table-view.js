@@ -3,7 +3,7 @@ const vscode = require("vscode");
 const { authTokens } = require('./auth.js');
 const { axios } = require("./axios-cookie-jar.js");
 
-
+// eslint-disable-next-line require-await
 async function showTableView(tableViewTitle, data, context) {
 
    const panel = vscode.window.createWebviewPanel(
@@ -75,7 +75,7 @@ async function showTableView(tableViewTitle, data, context) {
 
 
 
-function getJsonTableWebviewContent(filePath, jsonData) {
+function getJsonTableWebviewContent(tableTitle, jsonData) {
    // Extract column names from the first item in the JSON array
    // const columns = Object.keys(jsonData[0]);
    let columns;
@@ -138,7 +138,7 @@ function getJsonTableWebviewContent(filePath, jsonData) {
          </style>
       </head>
       <body>
-         <h1>${filePath} Data Table</h1>
+         <h1>${tableTitle}</h1>
          <div class="table-container">
                <table>
                   <thead>
@@ -174,4 +174,4 @@ function getJsonTableWebviewContent(filePath, jsonData) {
 }
 
 
-module.exports = { showTableView };
+module.exports = { showTableView, getJsonTableWebviewContent };
