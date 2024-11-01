@@ -14,10 +14,12 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 // REST API functions
 const {  restApiVersions, restApiCompare, restApiUpload, restApiProperties, restApiSubmitJob,
     restApiViewManifest
- } = require('./rest-api.js');
+} = require('./rest-api.js');
 
 const { localFolderContents, restApiFolderContents, compareFolderContents } = require('./folderView.js');
 
+const CustomSasPreviewerProvider = require("./custom-sas-previewer.js");
+console.log('(extension.js) typeof CustomSasPreviewerProvider:', typeof CustomSasPreviewerProvider);
 
 console.log('extension.js - before require("./auth.js")');
 const { initializeSecretModule, authTokens } = require('./auth.js');
@@ -34,7 +36,7 @@ async function activate(context) {
     initializeSecretModule(secretStorage);
 
     // A Map to store submitted jobs by server and their status
-    let JobSubmissionsByServer = new Map(); // Each key is a server, value is an array of job objects
+    // let JobSubmissionsByServer = new Map(); // Each key is a server, value is an array of job objects
 
     // Example of a task object
     // {
@@ -45,6 +47,21 @@ async function activate(context) {
 
     webrRepo = context.asAbsolutePath('webr-repo');
     console.log('webrRepo:', webrRepo);
+
+    console.log('Starting webR...');
+    await initWebR(webR, webrRepo);
+
+    context.subscriptions.push(
+        vscode.window.registerCustomEditorProvider(
+            'myExtension.customSasDatasetPreviewer', 
+            new CustomSasPreviewerProvider(context), 
+            {
+                webviewOptions: {
+                    retainContextWhenHidden: true
+                }
+            }
+        )
+    );
 
     const restApiUploadCommand = vscode.commands.registerCommand(
         "extension.restApiUpload",
@@ -83,7 +100,6 @@ async function activate(context) {
         (param) => compareFolderContents(param, null, context)
     );
 
-
     context.subscriptions.push(restApiUploadCommand);
     context.subscriptions.push(restApiCompareCommand);
     context.subscriptions.push(restApiPropertiesCommand);
@@ -93,9 +109,6 @@ async function activate(context) {
     context.subscriptions.push(restApiFolderContentsCommand);
     context.subscriptions.push(localFolderContentsCommand);
     context.subscriptions.push(compareFolderContentsCommand);
-
-    console.log('Starting webR...');
-    await initWebR(webR, webrRepo);
 
     console.log('vscode-lsaf-rest-api extension activated!');
 }
