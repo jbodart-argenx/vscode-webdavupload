@@ -85,3 +85,13 @@
 - Upload File to Repo creates new minor version
 - Report & check md5sum of downloaded files
 - Replace most filesystem access methods from node 'fs' to 'vscode.workspace.fs' (should allow access to remote & virtual filesystems)
+
+## 1.2.0
+
+- Improve performance of read_sas and read_xpt by mounting a filesystem image library of pre-installed webR packages (avoid need for download at run-time)
+- Use monospace font and preserve white space in MultiLineText webview
+- Add custom SAS Dataset Previewer provider for .xpt and .sas7bdat files
+- Add openUrl capability to Object Viewer
+- Retain context when TableView tabs are hidden
+- Open downloaded files with matching provider if any, otherwise with external System Default Application (Windows only)
+- Show filename in Table View webview tabs
