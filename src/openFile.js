@@ -12,7 +12,11 @@ function openFileWithDefaultApp(filePath) {
    if (os.platform() === 'win32' && !vscode.env.remoteName){
       exec(`start "" "${filePath}"`, (error) => {
          if (error) {
-            console.error('Error opening file:', error);
+            console.error('Error opening file in Default App:', error);
+            vscode.window.showErrorMessage(`Error opening file in Default App: ${error.message}`);
+         } else {
+            console.log(`File was opened in Default App: ${filePath}`);
+            vscode.window.showInformationMessage(`File was opened in Default App: ${filePath}`);
          }
       });
    } else {
