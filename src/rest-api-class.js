@@ -1327,8 +1327,8 @@ class RestApi {
                   console.log(error);
                }
                console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
-               showTableView(`Imported SAS data from ${confLabel} remote file: ${this.remoteFile}`, data);
-               showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from ${confLabel} remote file: ${this.remoteFile}`);
+               await showTableView(`Imported SAS data from ${confLabel} remote file: ${this.remoteFile}`, data);
+               await showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from ${confLabel} remote file: ${this.remoteFile}`);
                // openFile(vscode.Uri.file(tempFile.name));
             }
             if (/^application\/x-sas-xport(;|$)/.test(this.fileContentType)) {
@@ -1341,8 +1341,8 @@ class RestApi {
                   console.log(error);
                }
                console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
-               showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data);
-               showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from ${confLabel} remote file: ${this.remoteFile}`);
+               await showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data);
+               await showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from ${confLabel} remote file: ${this.remoteFile}`);
                // openFile(vscode.Uri.file(tempFile.name));
             }
          } else {
