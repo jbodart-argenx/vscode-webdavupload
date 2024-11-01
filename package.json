@@ -19,6 +19,17 @@
         "yarn": false
     },
     "contributes": {
+        "customEditors": [
+            {
+                "viewType": "myExtension.customSasDatasetPreviewer",
+                "displayName": "Custom SAS Dataset Previewer",
+                "selector": [
+                    { "filenamePattern": "*.sas7bdat" },
+                    { "filenamePattern": "*.xpt" }
+                ],
+                "priority": "default"
+            }
+        ],
         "commands": [
             {
                 "command": "extension.restApiUpload",
