@@ -64,17 +64,6 @@ async function read_sas_size(sas7bdatFile){
    return size;
 }
 
-async function read_xpt_size(sas7bdatFile){
-   let datadir = path.dirname(sas7bdatFile);
-   console.log('datadir:', datadir);
-   await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
-   let r_size = await webR.evalR(`dim(haven::read_xpt("/data/${path.basename(sas7bdatFile)}"))`);
-   await webR.FS.unmount("/data");
-   let size = await r_size.toArray();
-   await webR.destroy(r_size);
-   return size;
-}
-
 async function read_xpt(xptFile, rows = 'TRUE', cols = 'TRUE'){
    let datadir = path.dirname(xptFile);
    console.log('datadir:', datadir);
@@ -87,7 +76,40 @@ async function read_xpt(xptFile, rows = 'TRUE', cols = 'TRUE'){
    return JSON.parse(json);
 }
 
-module.exports = { initWebR, read_sas, read_xpt, read_sas_size, read_xpt_size };
+async function read_xpt_size(sas7bdatFile){
+   let datadir = path.dirname(sas7bdatFile);
+   console.log('datadir:', datadir);
+   await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
+   let r_size = await webR.evalR(`dim(haven::read_xpt("/data/${path.basename(sas7bdatFile)}"))`);
+   await webR.FS.unmount("/data");
+   let size = await r_size.toArray();
+   await webR.destroy(r_size);
+   return size;
+}
+
+async function read_rds(rdsFile, rows = 'TRUE', cols = 'TRUE'){
+   let datadir = path.dirname(rdsFile);
+   console.log('datadir:', datadir);
+   await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
+   let data_json = await webR.evalR(`jsonlite::toJSON(readRDS("/data/${path.basename(rdsFile)}")[${rows},${cols}])`);
+   await webR.FS.unmount("/data");
+   let json = await data_json.toArray();
+   webR.destroy(data_json);
+   return JSON.parse(json);
+}
+
+async function read_rds_size(rdsFile){
+   let datadir = path.dirname(rdsFile);
+   console.log('datadir:', datadir);
+   await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
+   let r_size = await webR.evalR(`dim(readRDS("/data/${path.basename(rdsFile)}"))`);
+   await webR.FS.unmount("/data");
+   let size = await r_size.toArray();
+   await webR.destroy(r_size);
+   return size;
+}
+
+module.exports = { initWebR, read_sas, read_xpt, read_sas_size, read_xpt_size, read_rds, read_rds_size };
 
 /*
 // example
