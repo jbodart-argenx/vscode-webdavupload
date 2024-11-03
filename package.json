@@ -22,10 +22,17 @@
         "customEditors": [
             {
                 "viewType": "myExtension.customSasDatasetPreviewer",
-                "displayName": "Custom SAS Dataset Previewer",
+                "displayName": "Custom SAS/R Dataset Previewer",
                 "selector": [
-                    { "filenamePattern": "*.sas7bdat" },
-                    { "filenamePattern": "*.xpt" }
+                    {
+                        "filenamePattern": "*.sas7bdat"
+                    },
+                    {
+                        "filenamePattern": "*.xpt"
+                    },
+                    {
+                        "filenamePattern": "*.rds"
+                    }
                 ],
                 "priority": "default"
             }
