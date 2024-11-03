@@ -14,7 +14,7 @@ const { streamToPromise } = require('./stream.js');
 const { pipeline } = require('stream/promises'); // Node.js v15+ only
 // const { showMultiLineText } = require('./multiLineText.js');
 const { showTableView } = require('./json-table-view.js');
-const { read_sas, read_xpt } = require('./read_sas.js');
+const { read_dataset, read_sas, read_xpt, read_rds } = require('./read_dataset.js');
 const xml2js = require('xml2js');
 const { getObjectView } = require("./object-view.js");
 console.log('(rest-api-class.js) typeof getObjectView:', typeof getObjectView);
@@ -1284,7 +1284,11 @@ class RestApi {
          const versionLabel = this.fileVersions[0] ? ` v${this.fileVersions[0]}` : '';
          const confLabel = `${(this.config.label || this.host.split(".")[0])}`.replace('/','-');
 
-         if (Buffer.isBuffer(this.fileContents[0]) || /^application\/x-sas-xport(;|$)/.test(this.fileContentType)) {
+         if (Buffer.isBuffer(this.fileContents[0])
+            || /^application\/x-sas-data(;|$)/.test(this.fileContentType) || ext === '.sas7bdat'
+            || /^application\/x-sas-xport(;|$)/.test(this.fileContentType) || ext === '.xpt'
+            || (/^application\/octet-stream(;|$)/.test(this.fileContentType) && ext === '.rds')
+         ) {
             const tempFile = tmp.fileSync({ postfix: ext, discardDescriptor: true });
             const tempFileUri = vscode.Uri.file(tempFile.name);
             let uint8Array;
@@ -1317,36 +1321,51 @@ class RestApi {
             } catch (err) {
                console.error(`Failed to set file as read-only: ${err}`);
             }
-            if (/^application\/x-sas-data(;|$)/.test(this.fileContentType)) {
+            // if (/^application\/x-sas-data(;|$)/.test(this.fileContentType)
+            //    || ext === '.sas7bdat'
+            // ) {
                let data;
-               console.log(`(viewFileContents) calling await read_sas(${tempFile.name})...`);
+               console.log(`(viewFileContents) calling await read_dataset(${tempFile.name})...`);
                try {
-                  data = await read_sas(tempFile.name);
+                  ({ data } = await read_dataset(tempFile.name));
                } catch (error) {
                   debugger;
                   console.log(error);
                }
-               console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
-               await showTableView(`Imported SAS data from ${confLabel} remote file: ${this.remoteFile}`, data,
+               // console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
+               await showTableView(`Imported Dataset from ${confLabel} remote file: ${this.remoteFile}`, data,
                                     undefined, `${this.remoteFile}`.split(/[/\\]/).pop()+` (${confLabel})`);
                // await showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from ${confLabel} remote file: ${this.remoteFile}`);
                // openFile(vscode.Uri.file(tempFile.name));
-            }
-            if (/^application\/x-sas-xport(;|$)/.test(this.fileContentType)) {
-               let data;
-               console.log(`(viewFileContents) calling await read_xpt(${tempFile.name})...`);
-               try {
-                  data = await read_xpt(tempFile.name);
-               } catch (error) {
-                  debugger;
-                  console.log(error);
-               }
-               console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
-               await showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data,
-                  undefined, `${this.remoteFile}`.split(/[/\\]/).pop()+` (${confLabel})`);
-               // await showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from ${confLabel} remote file: ${this.remoteFile}`);
-               // openFile(vscode.Uri.file(tempFile.name));
-            }
+            // } else if (/^application\/x-sas-xport(;|$)/.test(this.fileContentType) || ext === '.xpt') {
+            //    let data;
+            //    console.log(`(viewFileContents) calling await read_xpt(${tempFile.name})...`);
+            //    try {
+            //       data = await read_xpt(tempFile.name);
+            //    } catch (error) {
+            //       debugger;
+            //       console.log(error);
+            //    }
+            //    console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
+            //    await showTableView(`Imported SAS Xpt from ${confLabel} remote file: ${this.remoteFile}`, data,
+            //       undefined, `${this.remoteFile}`.split(/[/\\]/).pop()+` (${confLabel})`);
+            //    // await showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from ${confLabel} remote file: ${this.remoteFile}`);
+            //    // openFile(vscode.Uri.file(tempFile.name));
+            // } else if (/^application\/octet-stream(;|$)/.test(this.fileContentType) && ext === '.rds') {
+            //    let data;
+            //    console.log(`(viewFileContents) calling await read_rds(${tempFile.name})...`);
+            //    try {
+            //       data = await read_rds(tempFile.name);
+            //    } catch (error) {
+            //       debugger;
+            //       console.log(error);
+            //    }
+            //    console.log('(viewFileContents) Returned data:', beautify(JSON.stringify(data)));
+            //    await showTableView(`Imported R dataset from ${confLabel} remote file: ${this.remoteFile}`, data,
+            //       undefined, `${this.remoteFile}`.split(/[/\\]/).pop()+` (${confLabel})`);
+            //    // await showMultiLineText(beautify(JSON.stringify(data)), "Imported R dataset", `from ${confLabel} remote file: ${this.remoteFile}`);
+            //    // openFile(vscode.Uri.file(tempFile.name));
+            // }
          } else {
             // Create a temporary file URI with a specific extension
             const tempFileUri = vscode.Uri.parse('untitled:' + `(${confLabel}${versionLabel}) ${fileName}`);
