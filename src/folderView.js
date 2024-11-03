@@ -10,7 +10,7 @@ const { openFile } = require('./openFile');
 const beautify = require("js-beautify");
 const { showMultiLineText } = require('./multiLineText.js');
 const { showTableView } = require('./json-table-view.js');
-const { read_sas, read_xpt } = require('./read_sas.js');
+const { read_dataset, read_sas, read_xpt, read_rds } = require('./read_dataset.js');
 
 async function restApiFolderContents(param, _arg2, config = null) {
    const restApi = new RestApi();
@@ -383,16 +383,22 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                                     openFile(fileUri);
                                  break;
                               case '.sas7bdat':
-                                 data = await read_sas(message.filePath);
-                                 console.log(beautify(JSON.stringify(data)));
+                                 ({data} = await read_sas(message.filePath));
+                                 // console.log(beautify(JSON.stringify(data)));
                                  showTableView(`Imported SAS data from local file: ${message.filePath}`, data, context);
-                                 showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
+                                 // showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
                                  break;
                               case '.xpt':
-                                 data = await read_xpt(message.filePath);
-                                 console.log(beautify(JSON.stringify(data)));
+                                 ({data} = await read_xpt(message.filePath));
+                                 // console.log(beautify(JSON.stringify(data)));
                                  showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data, context);
-                                 showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
+                                 // showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
+                                 break;
+                              case '.rds':
+                                 ({data} = await read_rds(message.filePath));
+                                 // console.log(beautify(JSON.stringify(data)));
+                                 showTableView(`Imported R dataset from local file: ${message.filePath}`, data, context);
+                                 // showMultiLineText(beautify(JSON.stringify(data)), "Imported R dataset", `from local file: ${message.filePath}`);
                                  break;
                               default:
                                  isBinary = await isBinaryFile(message.filePath);
@@ -1103,16 +1109,22 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
                               openFile(fileUri);
                            break;
                         case '.sas7bdat':
-                           data = await read_sas(message.filePath);
-                           console.log(beautify(JSON.stringify(data)));
+                           ({data} = await read_sas(message.filePath));
+                           // console.log(beautify(JSON.stringify(data)));
                            showTableView(`Imported SAS data from local file: ${message.filePath}`, data, context);
-                           showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
+                           // showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS data", `from local file: ${message.filePath}`);
                            break;
                         case '.xpt':
-                           data = await read_xpt(message.filePath);
-                           console.log(beautify(JSON.stringify(data)));
+                           ({data} = await read_xpt(message.filePath));
+                           // console.log(beautify(JSON.stringify(data)));
                            showTableView(`Imported SAS Xpt from local file: ${message.filePath}`, data, context);
-                           showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
+                           // showMultiLineText(beautify(JSON.stringify(data)), "Imported SAS Xpt", `from local file: ${message.filePath}`);
+                           break;
+                        case '.rds':
+                           ({data} = await read_rds(message.filePath));
+                           // console.log(beautify(JSON.stringify(data)));
+                           showTableView(`Imported R dataset from local file: ${message.filePath}`, data, context);
+                           // showMultiLineText(beautify(JSON.stringify(data)), "Imported R dataset", `from local file: ${message.filePath}`);
                            break;
                         default:
                            isBinary = await isBinaryFile(message.filePath);
