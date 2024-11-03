@@ -1,14 +1,15 @@
 const vscode = require('vscode');
-const { read_sas, read_xpt } = require('./read_sas.js');
+const { read_sas, read_xpt, read_rds, read_sas_size, read_xpt_size, read_rds_size } = require('./read_sas.js');
 const { getJsonTableWebviewContent } = require('./json-table-view.js');
 const beautify = require("js-beautify");
 const { authTokens } = require('./auth.js');
 const { axios } = require("./axios-cookie-jar.js");
 
 class SasDatasetDocument {
-   constructor(uri, data) {
+   constructor(uri, data, size) {
       this.uri = uri;
       this.data = data;
+      this.size = size;
    }
 
    dispose() {
@@ -35,16 +36,35 @@ class CustomSasPreviewerProvider {
       let fileExt = uri.path.split(/[/\\]/).pop().split('.').pop();
       console.log('(CustomSasPreviewProvider.openCustomDocument) uri.path:', uri.path);
       console.log('(CustomSasPreviewProvider.openCustomDocument) fileExt:', fileExt);
-      let data;
+      let data, size;
+      const maxRows = 10000;
       if (fileExt === 'sas7bdat' && uri.fsPath) {
-         data = await read_sas(uri.fsPath);
+         size = await read_sas_size(uri.fsPath);
+         if (size[0] > maxRows) {
+            data = await read_sas(uri.fsPath, `1:${maxRows}`);
+         } else {
+            data = await read_sas(uri.fsPath);
+         }
       } else 
       if (fileExt === 'xpt' && uri.fsPath) {
-         data = await read_xpt(uri.fsPath);
+         size = await read_xpt_size(uri.fsPath);
+         if (size[0] > maxRows) {
+            data = await read_xpt(uri.fsPath, `1:${maxRows}`);
+         } else {
+            data = await read_xpt(uri.fsPath);
+         }
+      } else 
+      if (fileExt === 'rds' && uri.fsPath) {
+         size = await read_rds_size(uri.fsPath);
+         if (size[0] > maxRows) {
+            data = await read_rds(uri.fsPath, `1:${maxRows}`);
+         } else {
+            data = await read_rds(uri.fsPath);
+         }
       } else {
          data = await vscode.workspace.fs.readFile(uri);
       }
-      return new SasDatasetDocument(uri, data);
+      return new SasDatasetDocument(uri, data, size);
    }
 
    async resolveCustomEditor(document, webviewPanel, _token) {
@@ -53,7 +73,7 @@ class CustomSasPreviewerProvider {
          localResourceRoots: [this.context.extensionUri]
       };
 
-      webviewPanel.webview.html = await this.getHtmlForWebview(document.uri, document.data);
+      webviewPanel.webview.html = await this.getHtmlForWebview(document.uri, document.data, document.size);
 
       // Handle cancellation
       _token.onCancellationRequested(() => {
@@ -106,18 +126,23 @@ class CustomSasPreviewerProvider {
 
    }
 
-   getHtmlForWebview(uri, data) {
+   getHtmlForWebview(uri, data, size) {
       const style_script_refs = '';
       let content = 'This document type is not supported.';
       let fileExt = uri.path.split(/[/\\]/).pop().split('.').pop();
+      let sizeDescr = '';
+      if (Array.isArray(size)) {
+         if (data.length !== size[0]) {
+            sizeDescr = ` (${data.length} of ${size[0]} rows, ${size[1]} cols)`;
+         } else {
+            sizeDescr = ` (${size[0]} rows, ${size[1]} cols)`;
+         }
+      }
 
       if (typeof data === 'object') {
-         if (fileExt === 'sas7bdat') {
-            return getJsonTableWebviewContent(`Data Table: ${uri.fsPath}`, data);
-         } else 
-         if (fileExt === 'xpt' && uri.fsPath) {
-            return getJsonTableWebviewContent(`Data Table: ${uri.fsPath}`, data);
-         } 
+         if (['sas7bdat', 'xpt', 'rds'].includes(fileExt)) {
+            return getJsonTableWebviewContent(`Data Table${sizeDescr}: ${uri.fsPath}`, data);
+         }
          content = beautify(JSON.stringify(data));
       }
 
