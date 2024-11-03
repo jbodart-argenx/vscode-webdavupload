@@ -8,7 +8,7 @@ const { openFileWithMatchingProvider } = require("./openFile.js");
 const { streamToPromise } = require('./stream.js');
 const { pipeline } = require('stream/promises'); // Node.js v15+ only
 const { showTableView } = require("./json-table-view.js");
-const { read_sas, read_xpt } = require("./read_sas.js");
+const { read_dataset, read_sas, read_xpt, read_rds } = require("./read_dataset.js");
 const tmp = require("tmp");
 tmp.setGracefulCleanup();   // remove all controlled temporary objects on process exit
 
@@ -222,14 +222,16 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                               } catch (err) {
                                  console.error(`(getObjectView) openUrl: Failed to set file as read-only: ${err}`);
                               }
-                              if (/^.(sas7bdat|xpt)$/.test(fileExt)) {
+                              if (/^.(sas7bdat|xpt|rds)$/.test(fileExt)) {
                                  try {
                                     if (fileExt === '.sas7bdat') {
-                                       data = await read_sas(tempFile.name);
+                                       ({data} = await read_sas(tempFile.name));
+                                    } else if (fileExt === '.rds') {
+                                       ({data} = await read_rds(tempFile.name));
                                     } else {
-                                       data = await read_xpt(tempFile.name);
+                                       ({data} = await read_xpt(tempFile.name));
                                     }
-                                    showTableView(`SAS data from: ${message.url}`, data, context);
+                                    showTableView(`Data from: ${message.url}`, data, context);
                                  } catch (error) {
                                     console.warn(`Failed to open file with custom viewer: ${error.message}`);
                                  }
