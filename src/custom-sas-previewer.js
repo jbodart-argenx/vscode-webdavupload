@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { read_sas, read_xpt, read_rds, read_sas_size, read_xpt_size, read_rds_size } = require('./read_sas.js');
+const { read_dataset, read_sas, read_xpt, read_rds, read_sas_size, read_xpt_size, read_rds_size } = require('./read_dataset.js');
 const { getJsonTableWebviewContent } = require('./json-table-view.js');
 const beautify = require("js-beautify");
 const { authTokens } = require('./auth.js');
@@ -36,30 +36,30 @@ class CustomSasPreviewerProvider {
       let fileExt = uri.path.split(/[/\\]/).pop().split('.').pop();
       console.log('(CustomSasPreviewProvider.openCustomDocument) uri.path:', uri.path);
       console.log('(CustomSasPreviewProvider.openCustomDocument) fileExt:', fileExt);
-      let data, size;
+      let data, size, fullSize;
       const maxRows = 10000;
       if (fileExt === 'sas7bdat' && uri.fsPath) {
-         size = await read_sas_size(uri.fsPath);
-         if (size[0] > maxRows) {
-            data = await read_sas(uri.fsPath, `1:${maxRows}`);
-         } else {
-            data = await read_sas(uri.fsPath);
-         }
+         // Next statement is enclosed in parentheses to avoid confusion with a block statement 
+         // and error “Declaration or statement expected. ts(1128)”
+         ({ data, size, fullSize } = await read_sas(uri.fsPath));
+         console.log('size:', size);
+         console.log('fullSize:', fullSize);
+         console.log('data:', data);
       } else 
       if (fileExt === 'xpt' && uri.fsPath) {
          size = await read_xpt_size(uri.fsPath);
          if (size[0] > maxRows) {
-            data = await read_xpt(uri.fsPath, `1:${maxRows}`);
+            ({data} = await read_xpt(uri.fsPath, `1:${maxRows}`));
          } else {
-            data = await read_xpt(uri.fsPath);
+            ({data} = await read_xpt(uri.fsPath));
          }
       } else 
       if (fileExt === 'rds' && uri.fsPath) {
          size = await read_rds_size(uri.fsPath);
          if (size[0] > maxRows) {
-            data = await read_rds(uri.fsPath, `1:${maxRows}`);
+            ({data} = await read_rds(uri.fsPath, `1:${maxRows}`));
          } else {
-            data = await read_rds(uri.fsPath);
+            ({data} = await read_rds(uri.fsPath));
          }
       } else {
          data = await vscode.workspace.fs.readFile(uri);
