@@ -54,19 +54,36 @@ async function activate(context) {
 
 
     // Register the event listener for workspace folder changes
+    // Every time one or more folders are being added to the workspace,
+    // check for and remove any old folder that does not exist anymore from the workspace
     vscode.workspace.onDidChangeWorkspaceFolders(event => {
-        event.added.forEach(folder => {
-            // Check if the folder exists
-            if (!fs.existsSync(folder.uri.fsPath)) {
-                // Remove the folder if it does not exist
-                vscode.workspace.updateWorkspaceFolders(folder.index, 1);
+        // Run this every time one or more folders are being added to the workspace
+        event.added.forEach((newFolder, indx) => {
+            console.log(`Folder ${indx} being added to the workspace: ${newFolder}`);
+            // if (!fs.existsSync(newFolder.uri.fsPath)) {
+            //     // Remove the new folder if it does not exist
+            //     vscode.workspace.updateWorkspaceFolders(newFolder.index, 1);
+            // }
+            if (indx === 0) {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders) {
+                    workspaceFolders.forEach((folder, index) => {
+                        // Check if the folder exists - if not, remove it from the workspace
+                        if (!fs.existsSync(folder.uri.fsPath)) {
+                            console.warn('Removing non-existing workspace folder, index:', index, ', path:', folder.uri.fsPath);
+                            vscode.workspace.updateWorkspaceFolders(index, 1);
+                        } else {
+                            console.log('Keeping existing workspace folder, index:', index, ', path:', folder.uri.fsPath);
+                        }
+                    });
+                }
             }
         });
 
-        event.removed.forEach(folder => {
-            // Optionally handle removed folders
-            console.log(`Folder removed: ${folder.uri.fsPath}`);
-        });
+        // event.removed.forEach(folder => {
+        //     // Optionally handle removed folders
+        //     console.log(`Folder removed: ${folder.uri.fsPath}`);
+        // });
     });
 
     context.subscriptions.push(
