@@ -95,3 +95,9 @@
 - Retain context when TableView tabs are hidden
 - Open downloaded files with matching provider if any, otherwise with external System Default Application (Windows only)
 - Show filename in Table View webview tabs
+
+## 1.2.1
+
+- Add support for R datasets (.rds files) viewing
+- Limit the number of dataset rows displayed to prevent overloading the webview
+- Show dataset size (number of rows and columns) including the number of rows being displayed if not all
