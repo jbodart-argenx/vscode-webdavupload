@@ -78,8 +78,8 @@ const App = () => {
     );
   };
 
-  const headerRenderer = ({ columnIndex, style }) => (
-    <div style={{ ...style, display: 'flex', alignItems: 'center', border: '1px solid black', boxSizing: 'border-box' }}>
+  const headerRenderer = ({ columnIndex, key, style }) => (
+    <div key={key} style={{ ...style, display: 'flex', alignItems: 'center', border: '1px solid black', boxSizing: 'border-box', position: 'relative', backgroundColor: '#f0f0f0', fontWeight: 'bold' }}>
       <div style={{ flexGrow: 1 }}>{`Column ${columnIndex + 1}`}</div>
       <Draggable
         axis="x"
@@ -88,7 +88,7 @@ const App = () => {
         onDrag={(e, { deltaX }) => handleResize(columnIndex, deltaX)}
         position={{ x: 0, y: 0 }}
       >
-        <div className="DragHandleIcon">⋮</div>
+        <div className="DragHandleIcon" style={{ cursor: 'col-resize', padding: '0 4px', position: 'absolute', right: 0, top: 0, bottom: 0, backgroundColor: '#ccc' }}>⋮</div>
       </Draggable>
     </div>
   );
@@ -97,18 +97,35 @@ const App = () => {
     <div style={{ height: '100vh' }}>
       <AutoSizer>
         {({ height, width }) => (
-          <Grid
-            ref={gridRef}
-            columnCount={Object.keys(data[0]).length}
-            columnWidth={getColumnWidth}
-            height={height}
-            rowCount={data.length}
-            rowHeight={getRowHeight}
-            width={width}
-            deferredMeasurementCache={cache.current}
-            cellRenderer={cellRenderer}
-            headerRenderer={headerRenderer}
-          />
+          <>
+            <div style={{ display: 'flex', width }}>
+              {initialColumnWidths.map((_, columnIndex) => (
+                <div key={columnIndex} style={{ width: getColumnWidth({ index: columnIndex }), border: '1px solid black', boxSizing: 'border-box', backgroundColor: '#f0f0f0', fontWeight: 'bold', display: 'flex', alignItems: 'center', position: 'relative' }}>
+                  <div style={{ flexGrow: 1 }}>{`Column ${columnIndex + 1}`}</div>
+                  <Draggable
+                    axis="x"
+                    defaultClassName="DragHandle"
+                    defaultClassNameDragging="DragHandleActive"
+                    onDrag={(e, { deltaX }) => handleResize(columnIndex, deltaX)}
+                    position={{ x: 0, y: 0 }}
+                  >
+                    <div className="DragHandleIcon" style={{ cursor: 'col-resize', padding: '0 4px', position: 'absolute', right: 0, top: 0, bottom: 0, backgroundColor: '#ccc' }}>⋮</div>
+                  </Draggable>
+                </div>
+              ))}
+            </div>
+            <Grid
+              ref={gridRef}
+              columnCount={Object.keys(data[0]).length}
+              columnWidth={getColumnWidth}
+              height={height - 40} // Adjust height to account for header row
+              rowCount={data.length}
+              rowHeight={getRowHeight}
+              width={width}
+              deferredMeasurementCache={cache.current}
+              cellRenderer={cellRenderer}
+            />
+          </>
         )}
       </AutoSizer>
     </div>
