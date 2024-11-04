@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const fs = require("fs");
 const { initWebR, webR } = require('./read_dataset.js');
 
 let webrRepo;
@@ -50,6 +51,23 @@ async function activate(context) {
 
     console.log('Starting webR...');
     await initWebR(webR, webrRepo);
+
+
+    // Register the event listener for workspace folder changes
+    vscode.workspace.onDidChangeWorkspaceFolders(event => {
+        event.added.forEach(folder => {
+            // Check if the folder exists
+            if (!fs.existsSync(folder.uri.fsPath)) {
+                // Remove the folder if it does not exist
+                vscode.workspace.updateWorkspaceFolders(folder.index, 1);
+            }
+        });
+
+        event.removed.forEach(folder => {
+            // Optionally handle removed folders
+            console.log(`Folder removed: ${folder.uri.fsPath}`);
+        });
+    });
 
     context.subscriptions.push(
         vscode.window.registerCustomEditorProvider(

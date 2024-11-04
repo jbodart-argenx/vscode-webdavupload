@@ -101,3 +101,7 @@
 - Add support for R datasets (.rds files) viewing
 - Limit the number of dataset rows displayed to prevent overloading the webview
 - Show dataset size (number of rows and columns) including the number of rows being displayed if not all
+
+## 1.2.2
+
+- Remove any non-existing root-level folders from a workspace whenever a new root-level folder is added to a workspace
