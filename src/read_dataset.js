@@ -1,9 +1,10 @@
 const path = require('path');
+const vscode = require('vscode');
 const { WebR } = require('webr');
 const fs = require('fs');
 
 let webR;
-let webrRepo;
+// let webrRepo;
 
 async function initWebR(webrLibPath = path.join(__dirname, '..', 'webr-repo')) {
    webR = new WebR();
@@ -35,62 +36,102 @@ async function initWebR(webrLibPath = path.join(__dirname, '..', 'webr-repo')) {
 }
 
 async function read_dataset(file, rows, cols, maxRows, offset = 0, type = null){
-   // debugger ;
    rows = rows ?? '';
    cols = cols ?? '';
-   type = type ?? path.parse(file).ext;
+   type = type ?? path.parse(`${file}`).ext.replace(/^\./, '');
    console.log('(read_dataset) type:', type, ', file:', file);
-   // Identify directory with data
-   let datadir = path.dirname(file);
-   let message = 'Ok';
-   let rootFilesR, dataFilesR, data_str;
-   console.log('(read_sas) datadir:', datadir);
-   // Mount directory with data
-   try{
-      // rootFilesR = await webR.evalR(`list.files(path='/')`);
-      // console.log(await rootFilesR.toArray());
-      // dataFilesR = await webR.evalR(`list.files(path='/data')`)
-      // console.log(await dataFilesR.toArray());
-      await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
-      // dataFilesR = await webR.evalR(`list.files(path='/data')`)
-      // console.log(await dataFilesR.toArray());
-   } catch(err) {
-      console.log('(read_dataset) Error:', err);
+   let filename, isDataMounted = false;
+   filename = path.basename(`${file}`);
+   console.log('(read_dataset) filename:', filename);
+   let fileData, message;
+   if (file instanceof vscode.Uri  && file.scheme !== 'file') {
+      try {
+         console.log(`(read_dataset) Reading file from Uri: ${file} ...`);
+         fileData = await vscode.workspace.fs.readFile(file);
+         console.log(`(read_dataset) Writing file to Emscripten Virtual File System: /data/${filename} ...`);
+         await webR.FS.writeFile(`/data/${filename}`, new Uint8Array(fileData));
+         console.log(`(read_dataset) successfully written file: /data/${filename}`);
+         let dataFilesR = await webR.evalR(`list.files(path='/data')`)
+         console.log(await dataFilesR.toArray());
+         await webR.destroy(dataFilesR);
+      } catch (error) {
+         // debugger;
+         console.error(`(read_dataset) Error writing file to Emscripten Virtual File System: /data/${filename}:`, error);
+         throw error;
+      }
+   } else {
+      if (file instanceof vscode.Uri   && file.scheme === 'file') {
+         file = file.fsPath;
+      }
+      // Identify directory with data
+      let datadir = path.dirname(file);
+      message = 'Ok';
+      // let rootFilesR, dataFilesR, data_str;
+      console.log('(read_dataset) datadir:', datadir);
+      // Mount directory with data
+      try{
+         // rootFilesR = await webR.evalR(`list.files(path='/')`);
+         // console.log(await rootFilesR.toArray());
+         // dataFilesR = await webR.evalR(`list.files(path='/data')`)
+         // console.log(await dataFilesR.toArray());
+         await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
+         isDataMounted = true;
+         // dataFilesR = await webR.evalR(`list.files(path='/data')`)
+         // console.log(await dataFilesR.toArray());
+      } catch(err) {
+         console.log('(read_dataset) Error:', err);
+         throw err;
+      }
    }
    // Read data and export as JSON
    try{
       if (type === 'sas7bdat') {
-         await webR.evalR(`data <- haven::read_sas("/data/${path.basename(file)}")`);
+         await webR.evalR(`data <- haven::read_sas("/data/${filename}")`);
       } else if (type === 'xpt') {
-         await webR.evalR(`data <- haven::read_xpt("/data/${path.basename(file)}")`);
+         await webR.evalR(`data <- haven::read_xpt("/data/${filename}")`);
       } else if (type === 'rds') {
-         await webR.evalR(`data <- readRDS("/data/${path.basename(file)}")`);
+         await webR.evalR(`data <- readRDS("/data/${filename}")`);
       } else {
          await webR.evalR(`data <- data.frame()`) // data.frame with 0 rows, 0 columns
          message = 'Invalid type';
+         debugger ;
       }
       await webR.evalR(`jsonlite::toJSON(str(data))`);
    } catch(err) {
-      console.log(err);
+      debugger;
+      console.log('(read_dataset): Read Data error:', err);
    }
-   await webR.evalR(`data.table::setDT(data)`);
+   let isDataFrameR = await webR.evalR(`is.data.frame(data)`);
+   let isDataFrame = await isDataFrameR.toArray();
+   await webR.destroy(isDataFrameR);
+   if (isDataFrame) {
+      await webR.evalR(`data.table::setDT(data)`);
+   } else {
+      await webR.evalR(`data <- data.table::data.table(data)`);
+   }
    let colnamesR = await webR.evalR(`colnames(data)`);
    let colnames = await colnamesR.toArray();
-   console.log('colnames:', colnames);
+   console.log('(read_dataset): colnames:', colnames);
    await webR.destroy(colnamesR);
    let fullSizeR = await webR.evalR(`dim(data)`);
    let fullSize = await fullSizeR.toArray();
    await webR.destroy(fullSizeR);
-   console.log('fullSize:', fullSize);
-   if (Array.isArray(cols)) {
-      cols = `.(${cols.map(c => {
-         if (typeof c === 'number') c = colnames[c];
-         return c;
-      })
-      .filter(c)
-      .join(', ')})`;
+   console.log('(read_dataset): fullSize:', fullSize);
+   try {
+      if (Array.isArray(cols)) {
+         console.log(`(read_dataset): Filtering on cols: ${cols}`)
+         cols = `.(${cols.map(c => {
+            if (typeof c === 'number') c = colnames[c];
+            return c;
+         })
+         .filter(c => !!c)
+         .join(', ')})`;
+      }
+   } catch (error) {
+      debugger;
+      console.log(`(read_dataset): Filtering on cols error:`, error);
    }
-   console.log('rows:', rows, 'cols:', cols);
+   console.log('(read_dataset): rows:', rows, 'cols:', cols);
    await webR.evalR(`data <- data[${rows},${cols}]`);
    await webR.evalR(`str(data)`);
    // data_str = await webR.evalR(`jsonlite::toJSON(str(data))`);
@@ -100,6 +141,7 @@ async function read_dataset(file, rows, cols, maxRows, offset = 0, type = null){
    await webR.destroy(sizeR);
    console.log('size:', size);
    if (offset) {
+      console.log('Applying offset:', offset);
       if (offset < size[0]) {
          if (maxRows) {
             if (maxRows + offset > size[0]) {
@@ -114,14 +156,24 @@ async function read_dataset(file, rows, cols, maxRows, offset = 0, type = null){
    } else if (maxRows && maxRows < size[0]) {
       await webR.evalR(`data <- data[1:${maxRows},]`);
    }
-   let jsonR = await webR.evalR(`jsonlite::toJSON(data)`);
-   await webR.evalR(`rm(data); gc()`);
-   let json = await jsonR.toArray();
-   await webR.destroy(jsonR);
-   // Unmount directory with data
-   await webR.FS.unmount("/data");
-   // parse and return the JavaScript JSON data
-   return { data: JSON.parse(json), file, size, fullSize, offset, colnames, message };
+   let data;
+   try {
+      let jsonR = await webR.evalR(`jsonlite::toJSON(data)`);
+      await webR.evalR(`rm(data); gc()`);
+      let json = await jsonR.toArray();
+      await webR.destroy(jsonR);
+      // parse and return the JavaScript JSON data
+      data = JSON.parse(json);
+      if (isDataMounted){
+         // Unmount directory with data
+         await webR.FS.unmount("/data");
+      }
+   } catch (error) {
+      debugger;
+      console.log(`(read_dataset): Parsing JSON / Unmounting error:`, error);
+   }
+   console.log(`(read_dataset) results:`, { data, file, size, fullSize, offset, colnames, message });
+   return { data, file, size, fullSize, offset, colnames, message };
 }
 
 
@@ -135,16 +187,19 @@ async function read_rds(rdsFile, rows = '', cols = '', maxRows = 10000, offset =
    return await read_dataset(rdsFile, rows, cols, maxRows, offset, 'rds');
 }
 
-async function read_sas_size(sas7bdatFile){
-   let datadir = path.dirname(sas7bdatFile);
-   console.log('datadir:', datadir);
-   await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
-   let r_size = await webR.evalR(`dim(haven::read_sas("/data/${path.basename(sas7bdatFile)}"))`);
-   await webR.FS.unmount("/data");
-   let size = await r_size.toArray();
-   await webR.destroy(r_size);
+async function read_sas_size(datasetFile){
+   // let datadir = path.dirname(sas7bdatFile);
+   // console.log('datadir:', datadir);
+   // await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
+   // let r_size = await webR.evalR(`dim(haven::read_sas("/data/${path.basename(sas7bdatFile)}"))`);
+   // await webR.FS.unmount("/data");
+   // let size = await r_size.toArray();
+   // await webR.destroy(r_size);
+   const { fullSize: size } = await read_sas(datasetFile, '0');
    return size;
 }
+
+
 
 // async function read_xpt(xptFile, rows = 'TRUE', cols = 'TRUE'){
 //    let datadir = path.dirname(xptFile);
@@ -158,14 +213,15 @@ async function read_sas_size(sas7bdatFile){
 //    return JSON.parse(json);
 // }
 
-async function read_xpt_size(sas7bdatFile){
-   let datadir = path.dirname(sas7bdatFile);
-   console.log('datadir:', datadir);
-   await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
-   let r_size = await webR.evalR(`dim(haven::read_xpt("/data/${path.basename(sas7bdatFile)}"))`);
-   await webR.FS.unmount("/data");
-   let size = await r_size.toArray();
-   await webR.destroy(r_size);
+async function read_xpt_size(datasetFile){
+   // let datadir = path.dirname(sas7bdatFile);
+   // console.log('datadir:', datadir);
+   // await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
+   // let r_size = await webR.evalR(`dim(haven::read_xpt("/data/${path.basename(sas7bdatFile)}"))`);
+   // await webR.FS.unmount("/data");
+   // let size = await r_size.toArray();
+   // await webR.destroy(r_size);
+   const { fullSize: size } = await read_xpt(datasetFile, '0');
    return size;
 }
 
@@ -180,14 +236,15 @@ async function read_xpt_size(sas7bdatFile){
 //    return JSON.parse(json);
 // }
 
-async function read_rds_size(rdsFile){
-   let datadir = path.dirname(rdsFile);
-   console.log('datadir:', datadir);
-   await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
-   let r_size = await webR.evalR(`dim(readRDS("/data/${path.basename(rdsFile)}"))`);
-   await webR.FS.unmount("/data");
-   let size = await r_size.toArray();
-   await webR.destroy(r_size);
+async function read_rds_size(datasetFile){
+   // let datadir = path.dirname(rdsFile);
+   // console.log('datadir:', datadir);
+   // await webR.FS.mount('NODEFS', {root:  datadir}, "/data");
+   // let r_size = await webR.evalR(`dim(readRDS("/data/${path.basename(rdsFile)}"))`);
+   // await webR.FS.unmount("/data");
+   // let size = await r_size.toArray();
+   // await webR.destroy(r_size);
+   const { fullSize: size } = await read_sas(datasetFile, '0');
    return size;
 }
 
