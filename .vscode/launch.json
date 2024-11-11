@@ -8,7 +8,7 @@
             "runtimeExecutable": "${execPath}",
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}",  // Path to your extension
-                "--disable-extensions"
+                "--disable-extensions=false"
             ],
             "outFiles": [
                 "${workspaceFolder}/dist/**/*.js"  // Point to the bundled JS files
@@ -28,7 +28,8 @@
             "runtimeExecutable": "${execPath}",
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}",
-                "--extensionTestsPath=${workspaceFolder}/dist/test"  // Adjust test path if necessary
+                //"--extensionTestsPath=${workspaceFolder}/dist/test",  // Adjust test path if necessary
+                "--disable-extensions=false"
             ],
             "outFiles": [
                 "${workspaceFolder}/dist/**/*.js"  // Ensure this points to your test output files
