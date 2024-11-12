@@ -288,6 +288,13 @@ console.log('typeof restApiDownloadFolderAsZip:', typeof restApiDownloadFolderAs
 
 
 
+async function getXAuthToken(host) {
+   const restApi = new RestApi(undefined, host);
+   await restApi.logon();
+   return restApi.authToken;
+}
+
+
 async function restApiDownload(param, config = null, overwrite = null) {
    const restApi = new RestApi();
    if (typeof param === 'string') {
@@ -503,4 +510,5 @@ module.exports = {
    restApiUpload,
    restApiSubmitJob,
    restApiViewManifest,
+   getXAuthToken
 };
