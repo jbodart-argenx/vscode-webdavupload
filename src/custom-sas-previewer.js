@@ -157,6 +157,10 @@ class CustomSasPreviewerProvider {
          <html lang="en">
          <head>
          <meta charset="UTF-8">
+         <meta 
+            http-equiv="Content-Security-Policy"
+            content="default-src 'none';"
+         >
          <meta name="viewport" content="width=device-width, initial-scale=1.0">
          ${style_script_refs}
          </head>
@@ -175,7 +179,7 @@ class CustomSasPreviewerProvider {
    }
 }
 
-CustomSasPreviewerProvider.viewType = 'myExtension.customSasDatasetPreviewer';
+CustomSasPreviewerProvider.viewType = "jbodart-argenx-lsaf-restapi-upload-extension.customSasDatasetPreviewer";
 
 console.log('typeof CustomSasPreviewerProvider:', typeof CustomSasPreviewerProvider);
 console.log('typeof CustomSasPreviewerProvider?.register:', typeof CustomSasPreviewerProvider?.register);

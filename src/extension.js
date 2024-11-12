@@ -1,5 +1,6 @@
 const vscode = require("vscode");
 const fs = require("fs");
+const path = require("path");
 const { initWebR, webR } = require('./read_dataset.js');
 
 let webrRepo;
@@ -14,7 +15,7 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 
 // REST API functions
 const {  restApiVersions, restApiCompare, restApiUpload, restApiProperties, restApiSubmitJob,
-    restApiViewManifest
+    restApiViewManifest, getXAuthToken
 } = require('./rest-api.js');
 
 const { localFolderContents, restApiFolderContents, compareFolderContents } = require('./folderView.js');
@@ -88,7 +89,7 @@ async function activate(context) {
 
     context.subscriptions.push(
         vscode.window.registerCustomEditorProvider(
-            'myExtension.customSasDatasetPreviewer', 
+            "jbodart-argenx-lsaf-restapi-upload-extension.customSasDatasetPreviewer", 
             new CustomSasPreviewerProvider(context), 
             {
                 webviewOptions: {
@@ -98,41 +99,70 @@ async function activate(context) {
         )
     );
 
+
+    // react-big-table app
+    context.subscriptions.push(
+        vscode.commands.registerCommand("jbodart-argenx-lsaf-restapi-upload-extension.showReactBigTableWebview", () => {
+            const panel = vscode.window.createWebviewPanel(
+                'ReactBigTableWebview',
+                'React Big Table Webview',
+                vscode.ViewColumn.One,
+                {
+                    enableScripts: true,
+                    localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'react-big-table/build'))]
+                }
+            );
+
+            const appPath = path.join(context.extensionPath, 'react-big-table', 'build', 'index.html');
+            let html = fs.readFileSync(appPath, 'utf8');
+
+            // Update the paths to the static files
+            html = html.replace(/\/static\//g, `${panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'react-big-table', 'build', 'static'))).toString()}/`);
+
+            panel.webview.html = html;
+        })
+    );
+
     const restApiUploadCommand = vscode.commands.registerCommand(
-        "extension.restApiUpload",
+        "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
         restApiUpload
     );
     const restApiCompareCommand = vscode.commands.registerCommand(
-        "extension.restApiCompare",
+        "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
         restApiCompare
     );
     const restApiPropertiesCommand = vscode.commands.registerCommand(
-        "extension.restApiProperties",
+        "jbodart-argenx-lsaf-restapi-upload-extension.restApiProperties",
         restApiProperties
     );
     const restApiVersionsCommand = vscode.commands.registerCommand(
-        "extension.restApiVersions",
+        "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
         restApiVersions
     );
     const restApiSubmitJobCommand = vscode.commands.registerCommand(
-        "extension.restApiSubmitJob",
+        "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
         (param) => restApiSubmitJob(param, context)
     );
     const restApiViewManifestCommand = vscode.commands.registerCommand(
-        "extension.restApiViewManifest",
+        "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
         (param) => restApiViewManifest(param, context)
     );
     const restApiFolderContentsCommand = vscode.commands.registerCommand(
-        "extension.restApiFolderContents",
+        "jbodart-argenx-lsaf-restapi-upload-extension.restApiFolderContents",
         restApiFolderContents
     );
     const localFolderContentsCommand = vscode.commands.registerCommand(
-        "extension.localFolderContents",
+        "jbodart-argenx-lsaf-restapi-upload-extension.localFolderContents",
         (param) => localFolderContents(param, context)
     );
     const compareFolderContentsCommand = vscode.commands.registerCommand(
-        "extension.compareFolderContents",
+        "jbodart-argenx-lsaf-restapi-upload-extension.compareFolderContents",
         (param) => compareFolderContents(param, null, context)
+    );
+
+    const getXAuthTokenCommand = vscode.commands.registerCommand(
+        "jbodart-argenx-lsaf-restapi-upload-extension.getXAuthToken",
+        (host) => getXAuthToken(host)
     );
 
     context.subscriptions.push(restApiUploadCommand);
@@ -144,6 +174,7 @@ async function activate(context) {
     context.subscriptions.push(restApiFolderContentsCommand);
     context.subscriptions.push(localFolderContentsCommand);
     context.subscriptions.push(compareFolderContentsCommand);
+    context.subscriptions.push(getXAuthTokenCommand);
 
     console.log('vscode-lsaf-rest-api extension activated!');
 }
