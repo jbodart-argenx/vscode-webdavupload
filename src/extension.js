@@ -177,6 +177,11 @@ async function activate(context) {
     context.subscriptions.push(getXAuthTokenCommand);
 
     console.log('vscode-lsaf-rest-api extension activated!');
+
+    // Log registered LSAF commands 
+    const commands = (await vscode.commands.getCommands()).filter(c => /lsaf/i.test(c));
+    console.log('LSAF vscode.commands:');
+    commands.forEach(c => { console.log(`  ${c}`)})
 }
 
 console.log('typeof activate:', typeof activate);
