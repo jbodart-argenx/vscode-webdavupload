@@ -176,38 +176,45 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
 
          /* Custom Styles */
          :host {
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            height: 100%;
-         }
-         #container {
-            flex: 1;
-            overflow: auto;
-            position: relative;
-         }
-         table {
-            width: 100%;
-            border-collapse: collapse;
-         }
-         table th, table td {
-            border: 1px solid #ddd !important;
-            padding: 8px !important;
-            text-align: left !important;
-         }
-         table th {
-            background-color: #f2f2f2 !important;
-            position: sticky;
-            top: 0; /* Fix column headers */
-            z-index: 2; /* Ensure column headers are above other content */
-         }
-         table td:first-child {
-            position: sticky;
-            left: 0; /* Fix row headers */
-            background-color: #f9f9f9 !important; /* Optional: Different background for row headers */
-            z-index: 1; /* Ensure row headers are above other content but below column headers */
-         }
+               display: flex;
+               flex-direction: column;
+               width: 100%;
+               height: 100%;
+            }
+            #header {
+               flex: 0 0 auto;
+            }
+            #container {
+               flex: 1 1 auto;
+               overflow: auto;
+               position: relative;
+            }
+            table {
+               width: 100%;
+               border-collapse: collapse;
+            }
+            table th, table td {
+               border: 1px solid #ddd !important;
+               padding: 8px !important;
+               text-align: left !important;
+            }
+            table th {
+               background-color: #f2f2f2 !important;
+               position: sticky;
+               top: 0; /* Fix column headers */
+               z-index: 2; /* Ensure column headers are above other content */
+            }
+            table td:first-child {
+               position: sticky;
+               left: 0; /* Fix row headers */
+               background-color: #f9f9f9 !important; /* Optional: Different background for row headers */
+               z-index: 1; /* Ensure row headers are above other content but below column headers */
+            }
       </style>
+      <div id="header">
+         <h1>${tableTitle}</h1>
+         <button id="requestData">Request Data</button>
+      </div>
       <div id="container">
          <table id="dataTable">
             <thead>
@@ -234,38 +241,48 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'self' 'nonce-${nonce}';">
          <title>JSON Table</title>
          <style  nonce="${nonce}">
-            #JsonTableWebView {
-                  width: 100%;
-                  height: 100%;
-            }
             /* Styles for the shadow host */
             #shadow-host {
+               width: 100%;
+               height: 100%;
+               display: flex;
+               flex-direction: column;
+            }
+            #header {
+                  flex: 0 0 auto;
+            }
+            #container {
+                  flex: 1 1 auto;
+                  overflow: auto;
+                  position: relative;
+            }
+            table {
                   width: 100%;
+                  border-collapse: collapse;
+            }
+            table th, table td {
+                  border: 1px solid #ddd !important;
+                  padding: 8px !important;
+                  text-align: left !important;
+            }
+            table th {
+                  background-color: #f2f2f2 !important;
+                  position: sticky;
+                  top: 0; /* Fix column headers */
+                  z-index: 2; /* Ensure column headers are above other content */
+            }
+            table td:first-child {
+                  position: sticky;
+                  left: 0; /* Fix row headers */
+                  background-color: #f9f9f9 !important; /* Optional: Different background for row headers */
+                  z-index: 1; /* Ensure row headers are above other content but below column headers */
             }
          </style>
       </head>
       <body>
-         <div id="JsonTableWebView">
-         <h1>${tableTitle}</h1>
-         <button id="requestData">Request Data</button>
          <div id="shadow-host"></div>
-         </div>
          <script  nonce="${nonce}">
             const vscode = acquireVsCodeApi();
-
-                  
-            document.getElementById('requestData').addEventListener('click', () => {
-                  vscode.postMessage({ command: 'requestData' });
-            });
-
-            window.addEventListener('message', event => {
-                  const message = event.data;
-                  switch (message.command) {
-                     case 'sendData':
-                        updateTable(message.data);
-                        break;
-                  }
-            });
 
             function updateTable(jdata) {
                   if (typeof data === 'string') data = JSON.parse(jsonData);
@@ -301,6 +318,20 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
 
             // updateTable(\`${JSON.stringify(jsonData)}\`);
             
+                  
+            document.getElementById('requestData').addEventListener('click', () => {
+                  vscode.postMessage({ command: 'requestData' });
+            });
+
+            window.addEventListener('message', event => {
+                  const message = event.data;
+                  switch (message.command) {
+                     case 'sendData':
+                        updateTable(message.data);
+                        break;
+                  }
+            });
+
             document.querySelectorAll('a').forEach(link => {
                link.addEventListener('click', function(event) {
                   event.preventDefault(); // Prevent default link behavior
