@@ -105,3 +105,9 @@
 ## 1.2.2
 
 - Remove any non-existing root-level folders from a workspace whenever a new root-level folder is added to a workspace
+
+## 1.2.3
+
+- Every time one or more folders are being added to the workspace, check for and remove from the workspace any old folder that does not exist anymore.  When running SAS vscode extension, this allows adding SAS WORK Library folder to the workspace while removing old instances of the SAS WORK Library folder.
+- Use data.table() instead of setDT() when data is not a data.frame to avoid Error in `data.table::setDT(data)`: Cannot convert 'data' to data.table.
+- Allow reading datasets by file uri, including remote datasets and datasets on virtual filesystems
