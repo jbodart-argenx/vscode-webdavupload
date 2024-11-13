@@ -41,6 +41,11 @@
         ],
         "commands": [
             {
+                "command": "jbodart-argenx-lsaf-restapi-upload-extension.getXAuthToken",
+                "title": "Get LSAF Token",
+                "category": "LSAF"
+            },
+            {
                 "command": "jbodart-argenx-lsaf-restapi-upload-extension.showReactBigTableWebview",
                 "title": "React Big Table",
                 "category": "LSAF"
