@@ -289,7 +289,15 @@ console.log('typeof restApiDownloadFolderAsZip:', typeof restApiDownloadFolderAs
 
 
 async function getXAuthToken(host) {
+   if (host == null){
+      host = await vscode.window.showInputBox({ 
+         prompt: "Host name ?",
+         ignoreFocusOut: true
+      });
+   }
+   if (!host) throw new Error("getXAuthToken error: 'host' parameter must be specified");
    const restApi = new RestApi(undefined, host);
+   debugger ;
    await restApi.logon();
    return restApi.authToken;
 }
