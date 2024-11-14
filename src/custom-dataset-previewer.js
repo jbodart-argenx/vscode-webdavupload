@@ -5,7 +5,7 @@ const beautify = require("js-beautify");
 const { authTokens } = require('./auth.js');
 const { axios } = require("./axios-cookie-jar.js");
 
-class SasDatasetDocument {
+class DatasetDocument {
    constructor(uri, data, size) {
       this.uri = uri;
       this.data = data;
@@ -17,11 +17,12 @@ class SasDatasetDocument {
    }
 }
 
-class CustomSasPreviewerProvider {
+class CustomDatasetPreviewerProvider {
    static register(context) {
-      const provider = new CustomSasPreviewerProvider(context);
+      const provider = new CustomDatasetPreviewerProvider(context);
+
       const providerRegistration = vscode.window.registerCustomEditorProvider(
-         CustomSasPreviewerProvider.viewType,
+         CustomDatasetPreviewerProvider.viewType,
          provider,
          { webviewOptions: { retainContextWhenHidden: true } }
       );
@@ -45,24 +46,8 @@ class CustomSasPreviewerProvider {
          if (['sas7bdat', 'xpt', 'rds'].includes(fileExt)) {
             // Next statement is enclosed in parentheses to avoid confusion with a block statement 
             // and error “Declaration or statement expected. ts(1128)”
-            // ({ data, size, fullSize } = await read_sas(uri /*.fsPath*/));
-            // console.log('(openCustomDocument) read_sas() results: ', {size, fullSize, data});
             ({ data, size, fullSize } = await read_dataset(uri /*.fsPath*/));
             console.log('(openCustomDocument) read_dataset() results: ', {size, fullSize, data});
-         } else if (fileExt === 'xpt' /*&& uri.fsPath*/) {
-            size = await read_xpt_size(uri.fsPath);
-            if (size[0] > maxRows) {
-               ({data} = await read_xpt(uri.fsPath, `1:${maxRows}`));
-            } else {
-               ({data} = await read_xpt(uri.fsPath));
-            }
-         } else  if (fileExt === 'rds' && uri.fsPath) {
-            size = await read_rds_size(uri.fsPath);
-            if (size[0] > maxRows) {
-               ({data} = await read_rds(uri.fsPath, `1:${maxRows}`));
-            } else {
-               ({data} = await read_rds(uri.fsPath));
-            }
          } else {
             data = await vscode.workspace.fs.readFile(uri);
          }         
@@ -71,13 +56,19 @@ class CustomSasPreviewerProvider {
          console.log(error);
       }
 
-      return new SasDatasetDocument(uri, data, size);
+      return new DatasetDocument(uri, data, size);
    }
 
    async resolveCustomEditor(document, webviewPanel, _token) {
       webviewPanel.webview.options = {
          enableScripts: true,
-         localResourceRoots: [this.context.extensionUri]
+         localResourceRoots: [
+            this.context.extensionUri,
+            vscode.Uri.file(path.join(context.extensionPath, 'media'))
+         ],
+         retainContextWhenHidden: true,
+         enableCommandUris: true // Enable registered commands to be called as URIs from webview HTML e.g.:
+                                 // <a href="command:table-viewer.showMessage?%22Hello%22">Say 'Hello' with Command Uri</a>
       };
 
       webviewPanel.webview.html = await this.getHtmlForWebview(document.uri, document.data, document.size);
@@ -94,7 +85,7 @@ class CustomSasPreviewerProvider {
             switch (message.command) {
                case 'alert':
                   if (message.text) {
-                     console.warn('(CustomSasPreviewerProvider)', message.text);
+                     console.warn('(CustomDatasetPreviewerProvider)', message.text);
                      vscode.window.showErrorMessage(message.text);
                   }
                   break;
@@ -134,7 +125,10 @@ class CustomSasPreviewerProvider {
    }
 
    getHtmlForWebview(uri, data, size) {
-      const style_script_refs = '';
+      const style_script_refs = `
+         <style>${fs.readFileSync(path.join(this.context.extensionPath, 'media', 'styles.css'), 'utf8')}</style>
+         <script>${fs.readFileSync(path.join(this.context.extensionPath, 'media', 'script.js'), 'utf8')}</script>
+         `;
       let content = 'This document type is not supported.';
       let fileExt = uri.path.split(/[/\\]/).pop().split('.').pop();
       let sizeDescr = '';
@@ -153,36 +147,43 @@ class CustomSasPreviewerProvider {
          content = beautify(JSON.stringify(data));
       }
 
+
       return `<!DOCTYPE html>
          <html lang="en">
          <head>
          <meta charset="UTF-8">
+         <meta name="viewport" content="width=device-width, initial-scale=1.0">
          <meta 
             http-equiv="Content-Security-Policy"
-            content="default-src 'none';"
+            content="default-src 'none'; style-src 'unsafe-inline' vscode-resource:; script-src 'unsafe-inline' vscode-resource:;"
          >
-         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+         <title>${uri.path.split('/').pop()}</title>
          ${style_script_refs}
          </head>
          <body>
-         <h1>Preview of ${uri.path}</h1>
-         <div id="content">${content}</div>
-         <script>
-            const vscode = acquireVsCodeApi();
-            function sendMessage() {
-               vscode.postMessage({ command: 'alert', text: 'Hello from the webview!' });
-            }
-         </script>
+            <div id="metadata">
+               <p>Source: <span id="source"></span></p>
+               <p>Filters: <span id="filters"></span></p>
+               <p>Showing rows <span id="start"></span> to <span id="end"></span> of <span id="total"></span></p>
+               <button onclick="triggerCommand('Hello from the webview!')">Click me to trigger a command</button>
+               <a href="command:table-viewer.showMessage?%22Hello%22">Say 'Hello' with Command Uri</a>
+            </div>
+            <div class="table-container" id="table-container">
+               <table id="data-table">
+                  <thead></thead>
+                  <tbody></tbody>
+               </table>
+            </div>
          </body>
          </html>`;
       
    }
 }
 
-CustomSasPreviewerProvider.viewType = "jbodart-argenx-lsaf-restapi-upload-extension.customSasDatasetPreviewer";
+CustomDatasetPreviewerProvider.viewType = "jbodart-argenx-lsaf-restapi-upload-extension.customDatasetPreviewer";
 
-console.log('typeof CustomSasPreviewerProvider:', typeof CustomSasPreviewerProvider);
-console.log('typeof CustomSasPreviewerProvider?.register:', typeof CustomSasPreviewerProvider?.register);
+console.log('typeof CustomDatasetPreviewerProvider:', typeof CustomDatasetPreviewerProvider);
+console.log('typeof CustomDatasetPreviewerProvider?.register:', typeof CustomDatasetPreviewerProvider?.register);
 
 
-module.exports = CustomSasPreviewerProvider;
+module.exports = CustomDatasetPreviewerProvider;
