@@ -1,0 +1,43 @@
+body {
+   font-family: Arial, sans-serif;
+   margin: 0;
+   padding: 0;
+   overflow: hidden; /* Prevents scrollbars on the body */
+}
+
+#metadata {
+   margin: 10px;
+}
+
+.table-container {
+   overflow: auto;
+   position: relative;
+}
+
+table {
+   border-collapse: collapse;
+   width: 100%;
+}
+
+th, td {
+   border: 1px solid #ddd;
+   padding: 8px;
+}
+
+thead th {
+   position: sticky;
+   top: 0;
+   background-color: #f1f1f1;
+   z-index: 2; /* Ensure it stays above other elements */
+}
+
+tbody th {
+   position: sticky;
+   left: 0;
+   background-color: #f1f1f1;
+   z-index: 1; /* Ensure it stays above other elements */
+}
+
+th {
+   cursor: pointer;
+}
