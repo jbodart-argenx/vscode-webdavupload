@@ -20,8 +20,8 @@ const {  restApiVersions, restApiCompare, restApiUpload, restApiProperties, rest
 
 const { localFolderContents, restApiFolderContents, compareFolderContents } = require('./folderView.js');
 
-const CustomSasPreviewerProvider = require("./custom-sas-previewer.js");
-console.log('(extension.js) typeof CustomSasPreviewerProvider:', typeof CustomSasPreviewerProvider);
+const CustomDatasetPreviewerProvider = require("./custom-dataset-previewer.js");
+console.log('(extension.js) typeof CustomDatasetPreviewerProvider:', typeof CustomDatasetPreviewerProvider);
 
 console.log('extension.js - before require("./auth.js")');
 const { initializeSecretModule, authTokens } = require('./auth.js');
@@ -89,11 +89,16 @@ async function activate(context) {
 
     context.subscriptions.push(
         vscode.window.registerCustomEditorProvider(
-            "jbodart-argenx-lsaf-restapi-upload-extension.customSasDatasetPreviewer", 
-            new CustomSasPreviewerProvider(context), 
+            "jbodart-argenx-lsaf-restapi-upload-extension.customDatasetPreviewer", 
+            new CustomDatasetPreviewerProvider(context), 
             {
                 webviewOptions: {
-                    retainContextWhenHidden: true
+                    enableScripts: true,
+                    localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))],
+                    retainContextWhenHidden: true,
+                    enableCommandUris: true // Enable registered commands to be called as URIs from webview HTML e.g.:
+											// <a href="command:table-viewer.showMessage?%22Hello%22">Say 'Hello' with Command Uri</a>
+
                 }
             }
         )
@@ -181,7 +186,7 @@ async function activate(context) {
     // Log registered LSAF commands 
     const commands = (await vscode.commands.getCommands()).filter(c => /lsaf/i.test(c));
     console.log('LSAF vscode.commands:');
-    commands.forEach(c => { console.log(`  ${c}`)})
+    commands.forEach(c => { console.log(`  ${c}`)});
 }
 
 console.log('typeof activate:', typeof activate);
