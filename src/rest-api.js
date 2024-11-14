@@ -297,7 +297,7 @@ async function getXAuthToken(host) {
    }
    if (!host) throw new Error("getXAuthToken error: 'host' parameter must be specified");
    const restApi = new RestApi(undefined, host);
-   debugger ;
+   // debugger ;
    await restApi.logon();
    return restApi.authToken;
 }
