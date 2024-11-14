@@ -23,8 +23,8 @@
     "contributes": {
         "customEditors": [
             {
-                "viewType": "jbodart-argenx-lsaf-restapi-upload-extension.customSasDatasetPreviewer",
-                "displayName": "Custom SAS/R Dataset Previewer",
+                "viewType": "jbodart-argenx-lsaf-restapi-upload-extension.customDatasetPreviewer",
+                "displayName": "Custom Dataset Previewer",
                 "selector": [
                     {
                         "filenamePattern": "*.sas7bdat"
