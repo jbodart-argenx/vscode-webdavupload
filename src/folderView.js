@@ -172,9 +172,9 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
       vscode.ViewColumn.One,
       {
          enableScripts: true, // Allow running JavaScript in the Webview
-         localResourceRoots: [
+         localResourceRoots: context ? [
             vscode.Uri.file(path.join(context.extensionPath, 'webr-repo'))
-         ],
+         ] : [],
       }
    );
 
@@ -879,9 +879,9 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
       vscode.ViewColumn.One,
       {
          enableScripts: true, // Allow running JavaScript in the Webview
-         localResourceRoots: [
+         localResourceRoots: context ? [
             vscode.Uri.file(path.join(context.extensionPath, 'webr-repo'))
-         ],
+         ] : [],
       }
    );
 
