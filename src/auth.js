@@ -39,6 +39,11 @@ class CredentialStore{
       // await keytar.setPassword(this.app, key, JSON.stringify({username, password}));
       await secretStorage.store(key, JSON.stringify({username, password}));
    }
+
+   async DeleteCredential(key) {
+      debugger ;
+      await secretStorage.delete(key);
+   }
 }
 
 const credStore = new CredentialStore();
@@ -99,7 +104,31 @@ async function storeCredentials(key, username, password) {
    await credStore.SetCredential(key, username, password);
 }
 
+async function deleteCredentials(key) {
+   if (!key) throw new Error('deleteCredentials: no hostname provided, aborting.');
+   await credStore.DeleteCredential(key);
+   const shortkey = String(key).split('.')[0];
+   if (process.env[`${shortkey}_encpasswd`]) {
+      delete process.env[`${shortkey}_encpasswd`];
+      console.log(`Deleted environment variable: "${shortkey}_encpasswd"`);
+   } else {
+      console.log(`Environment variable "${shortkey}_encpasswd" does not exist.`);
+   }
+   if (process.env[`${shortkey}_passwd`]) {
+      delete process.env[`${shortkey}_passwd`];
+      console.log(`Deleted environment variable: "${shortkey}_passwd"`);
+   } else {
+      console.log(`Environment variable "${shortkey}_passwd" does not exist.`);
+   }
+   const credentials = await credStore.GetCredential(key);
+   if (credentials == null) {
+      console.log(`Host ${key} credentials successfully deleted.`);
+   } else {
+      console.error(`Host ${key} credentials were NOT deleted!`);
+   }
+}
+
 module.exports = { 
-   storeCredentials, askForCredentials, getCredentials, EMPTY_CREDENTIALS, credStore, CredentialStore,
+   storeCredentials, askForCredentials, getCredentials, deleteCredentials, EMPTY_CREDENTIALS, credStore, CredentialStore,
    initializeSecretModule, setAuthTokens, authTokens
 };
