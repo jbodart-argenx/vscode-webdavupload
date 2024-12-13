@@ -69,6 +69,21 @@ async function restApiZipUploadAndExpand(param, config = null) {
 console.log('typeof restApiZipUploadAndExpand:', typeof restApiZipUploadAndExpand);
 
 
+async function restApiDeleteCredentials(host) {
+   if (host == null){
+      host = await vscode.window.showInputBox({ 
+         title: "Delete credentials for host name",
+         prompt: "Enter fully qualified host name (e.g. 'xxxxxxx.ondemand.sas.com')\n",
+         ignoreFocusOut: true
+      });
+   }
+   if (!host) {
+      vscode.window.showWarningMessage("restApiDeleteCredentials: no 'host' specified, aborting.");
+   }
+   const restApi = new RestApi(undefined, host);
+   restApi.deleteCredentials(host)
+}
+
 async function restApiUpload(param, config = null) {
    const restApi = new RestApi();
    if (typeof param === 'string') {
@@ -518,5 +533,6 @@ module.exports = {
    restApiUpload,
    restApiSubmitJob,
    restApiViewManifest,
-   getXAuthToken
+   getXAuthToken,
+   restApiDeleteCredentials
 };
