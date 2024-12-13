@@ -15,7 +15,7 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 
 // REST API functions
 const {  restApiVersions, restApiCompare, restApiUpload, restApiProperties, restApiSubmitJob,
-    restApiViewManifest, getXAuthToken
+    restApiViewManifest, getXAuthToken, restApiDeleteCredentials
 } = require('./rest-api.js');
 
 const { localFolderContents, restApiFolderContents, compareFolderContents } = require('./folderView.js');
@@ -94,7 +94,7 @@ async function activate(context) {
             {
                 webviewOptions: {
                     enableScripts: true,
-                    localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))],
+                    localResourceRoots: context ? [vscode.Uri.file(path.join(context.extensionPath, 'media'))] : [] ,
                     retainContextWhenHidden: true,
                     enableCommandUris: true // Enable registered commands to be called as URIs from webview HTML e.g.:
 											// <a href="command:table-viewer.showMessage?%22Hello%22">Say 'Hello' with Command Uri</a>
@@ -114,7 +114,7 @@ async function activate(context) {
                 vscode.ViewColumn.One,
                 {
                     enableScripts: true,
-                    localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'react-big-table/build'))]
+                    localResourceRoots: context ? [vscode.Uri.file(path.join(context.extensionPath, 'react-big-table/build'))] : []
                 }
             );
 
@@ -170,6 +170,11 @@ async function activate(context) {
         (host) => getXAuthToken(host)
     );
 
+    const deleteCredentialsCommand = vscode.commands.registerCommand(
+        "jbodart-argenx-lsaf-restapi-upload-extension.deleteCredentials",
+        (host) => restApiDeleteCredentials(host)
+    );
+
     context.subscriptions.push(restApiUploadCommand);
     context.subscriptions.push(restApiCompareCommand);
     context.subscriptions.push(restApiPropertiesCommand);
@@ -180,6 +185,7 @@ async function activate(context) {
     context.subscriptions.push(localFolderContentsCommand);
     context.subscriptions.push(compareFolderContentsCommand);
     context.subscriptions.push(getXAuthTokenCommand);
+    context.subscriptions.push(deleteCredentialsCommand);
 
     console.log('vscode-lsaf-rest-api extension activated!');
 
