@@ -28,7 +28,7 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 
 const { getEndpointConfigForCurrentPath } = require('./endpointConfig.js');
 
-const { askForCredentials, getCredentials, storeCredentials, authTokens, setAuthTokens } = require('./auth.js')
+const { askForCredentials, getCredentials, storeCredentials, deleteCredentials, authTokens, setAuthTokens } = require('./auth.js')
 
 
 // REST API functions
@@ -130,7 +130,7 @@ class RestApi {
 
    async encryptPassword(password) {
       const url = `${this.apiUrl}/encrypt`;
-      console.log('password:', password);
+      console.log('password:', String(password).replaceAll(/\w/g, '*'));
       if (password === '') {
          console.error('encryptPassword(): no password provided, aborting.');
          this.encryptedPassword = null;
@@ -155,7 +155,7 @@ class RestApi {
          }
 
          const result = response.data;
-         console.log('(encryptPassword) result:', result);
+         console.log('(encryptPassword) result:', String(result).replaceAll(/[\w]/g, '*'));
          this.encryptedPassword = result;
       } catch (error) {
          console.error('Error fetching encrypted password:', error);
@@ -202,7 +202,7 @@ class RestApi {
          }
       }
       if (!this.encryptedPassword || typeof this.encryptedPassword !== 'string') {
-         console.log(this.encryptedPassword);
+         console.log(String(this.encryptedPassword).replaceAll(/[\w]/g, '*'));
          const creds = await getCredentials(this.host);
          const { _username: username, _password: password } = creds;
          if (typeof username === 'string' 
@@ -224,7 +224,7 @@ class RestApi {
                await this.encryptPassword(password);
             } else {
                this.encryptedPassword = null;
-               return this.logon();
+               if (username.trim().length > 0) return this.logon();
             }
          }
          if (typeof this.encryptedPassword === 'object') {
@@ -305,8 +305,31 @@ class RestApi {
          console.error('Error fetching x-auth-token:', error)
       }
    }
-
-
+   
+   async deleteCredentials(host){
+      if (!host) host = this.host;
+      if (!host) {
+         vscode.window.showErrorMessage(`deleteCredentials: Undefined host, aborting.`);
+         return;
+      }
+      try {
+         debugger ;
+         if (authTokens[host]) {
+            delete authTokens[host];
+            console.log(`Host ${host} auth token deleted.`);
+         }
+         if (! (await getCredentials(this.host))?._password) {
+            vscode.window.showErrorMessage(`deleteCredentials: No credentials saved for Host "${host}", aborting.`);
+            return;
+         };
+         await deleteCredentials(host);
+         console.log(`Host ${host} credentials deleted.`);
+         vscode.window.showInformationMessage(`Host "${host}" credentials were successfully deleted.`);
+      } catch (error) {
+         console.error(`Error deleting Host "${host}" credentials: ${error.message}`);
+         vscode.window.showErrorMessage(`Error deleting Host "${host}" credentials: ${error.message}`);
+      }
+   }
 
    async getRemoteFolderContentsAsZip(param) {
       if (typeof param === 'string') {
