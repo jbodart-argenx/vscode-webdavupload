@@ -40,6 +40,7 @@ class RestApi {
       this.encryptedPassword = null;
       this.authToken = null;
       this.remoteFile = null;
+      this.remoteFileUri = null;
       this.localFile = null;
       this.localFileStat = null;
       this.tempFile = null;
@@ -89,9 +90,7 @@ class RestApi {
       const config = await getEndpointConfigForCurrentPath(workingDir, onlyRepo);
 
       if (!config) {
-         vscode.window.showErrorMessage(
-            "Configuration not found for the current path."
-         );
+         vscode.window.showErrorMessage(`Configuration not found for the current path: ${workingDir}`);
 
          this.config = null;
          return;
@@ -313,7 +312,6 @@ class RestApi {
          return;
       }
       try {
-         debugger ;
          if (authTokens[host]) {
             delete authTokens[host];
             console.log(`Host ${host} auth token deleted.`);
@@ -427,7 +425,6 @@ class RestApi {
       }
       if (param instanceof URL) {
          param = vscode.Uri.from(param);
-         debugger ;
       }
       if (param instanceof vscode.Uri) {
          this.localFile = param;
@@ -1661,6 +1658,11 @@ class RestApi {
 
       const url = new URL(this.config.remoteEndpoint.url);
       this.host = url.hostname;
+      if (`${url}`.test(/^https:\/\/([\w-]+).ondemand.sas.com\/lsaf\/webdav\/(work|repo)(\/.*)$/)) {
+         this.remoteFileUri = `${url}${this.remoteFile}`.replace(/^https:\/\/([\w-]+).ondemand.sas.com\/lsaf\/webdav\/(work|repo)(\/.*)$/, 'lsaf-$2://$1$3');
+      } else {
+         this.remoteFileUri = null;
+      }
    }
 
    async uploadAndExpand(param, comment) {
