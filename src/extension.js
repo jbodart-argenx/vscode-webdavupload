@@ -15,7 +15,7 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 
 // REST API functions
 const {  restApiVersions, restApiCompare, restApiUpload, restApiProperties, restApiSubmitJob,
-    restApiViewManifest, getXAuthToken, restApiDeleteCredentials
+    restApiViewManifest, restApiCopyRemoteFilePath, restApiCopyRemoteFileUri, getXAuthToken, restApiDeleteCredentials
 } = require('./rest-api.js');
 
 const { localFolderContents, restApiFolderContents, compareFolderContents } = require('./folderView.js');
@@ -132,6 +132,14 @@ async function activate(context) {
         "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
         restApiUpload
     );
+    const restApiCopyRemoteFileUriCommand = vscode.commands.registerCommand(
+        "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
+        (param) => restApiCopyRemoteFileUri(param, null, context)
+    );
+    const restApiCopyRemoteFilePathCommand = vscode.commands.registerCommand(
+        "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
+        (param) => restApiCopyRemoteFilePath(param, null, context)
+    );
     const restApiCompareCommand = vscode.commands.registerCommand(
         "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
         restApiCompare
@@ -176,6 +184,8 @@ async function activate(context) {
     );
 
     context.subscriptions.push(restApiUploadCommand);
+    context.subscriptions.push(restApiCopyRemoteFileUriCommand);
+    context.subscriptions.push(restApiCopyRemoteFilePathCommand);
     context.subscriptions.push(restApiCompareCommand);
     context.subscriptions.push(restApiPropertiesCommand);
     context.subscriptions.push(restApiVersionsCommand);
