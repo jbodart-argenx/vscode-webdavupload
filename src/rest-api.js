@@ -14,6 +14,7 @@ tmp.setGracefulCleanup();   // remove all controlled temporary objects on proces
 const { showMultiLineText } = require('./multiLineText.js');
 
 const { RestApi } = require('./rest-api-class.js');
+const { getEndpointConfigForCurrentPath } = require('./endpointConfig.js');
 
 
 
@@ -83,6 +84,177 @@ async function restApiDeleteCredentials(host) {
    const restApi = new RestApi(undefined, host);
    restApi.deleteCredentials(host)
 }
+
+
+async function restApiGetRemoteFileUri(param, config = null) {
+   const restApi = new RestApi();
+   if (typeof param === 'string') {
+      param = vscode.Uri.file(param);
+   }
+   if (param instanceof vscode.Uri) {
+      vscode.window.showInformationMessage(`Rest API: Getting Remote File URI: ${param.fsPath}`);
+      try {
+         if (config && config.label) {
+            restApi.config = config;
+         } else {
+            await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
+            // otherwise based on the path of the local file open in the active editor
+            // also sets remoteFile
+            if (!restApi.config) {
+               return;
+            }
+         }
+         if (param instanceof vscode.Uri) {
+            console.log('(restApiGetRemoteFileUri) param:', param);
+            restApi.localFile = param.fsPath;
+            restApi.localFileStat = await vscode.workspace.fs.stat(param);
+            restApi.getRemoteFilePath();   // get Remote File Path
+         }
+         const uri = restApi.remoteFileUri;
+         console.log(`Remote file Uri: ${uri}`)
+         return uri;
+      } catch (err) {
+         console.log(err);
+      }
+   } else {
+      vscode.window.showWarningMessage(`Rest API: Cannot retrieve Remote File Uri for param type ${typeof param}: ${param}`);
+   }
+}
+
+
+async function restApiGetRemoteFilePath(param, config = null) {
+   const restApi = new RestApi();
+   let remoteFilePath = '';
+   let remoteWSFolderPath = '';
+   if (typeof param === 'string') {
+      param = vscode.Uri.file(param);
+   }
+   if (param instanceof vscode.Uri) {
+      vscode.window.showInformationMessage(`Rest API: Getting Remote File Path: ${param.fsPath}`);
+      try {
+         if (config && config.label) {
+            restApi.config = config;
+            console.log('(restApiGetRemoteFilePath) param:', param);
+            restApi.localFile = param.fsPath;
+            restApi.localFileStat = await vscode.workspace.fs.stat(param);
+            restApi.getRemoteFilePath();   // get Remote File Path
+            remoteFilePath = restApi.remoteFile;
+            console.log(`Remote file Path: ${remoteFilePath}`)
+            return remoteFilePath;
+         } else {
+            const onlyRepo = false;
+            const getUniquePaths = true;
+            let uniquePaths = await getEndpointConfigForCurrentPath(param.fsPath, onlyRepo, getUniquePaths);
+            let uniquePathsArray;
+            let configFile;
+            if (!Array.isArray(uniquePaths) && typeof uniquePaths === 'object') {
+               uniquePathsArray = Object.keys(uniquePaths);
+               configFile = uniquePaths[uniquePathsArray[0]][0].configFile;
+            } else {
+               uniquePathsArray = uniquePaths;
+            }
+            console.log(`uniquePathsArray:`, uniquePathsArray);
+            if (uniquePathsArray.length > 1) {
+               const selectedPath = await vscode.window.showQuickPick(uniquePathsArray, {
+                  placeHolder: "Choose a remote location",
+                  canPickMany: false,
+               });
+               if (selectedPath == null) {
+                  selectedPath = uniquePathsArray[0];
+               }
+               console.log('selectedPath:', selectedPath);
+               remoteWSFolderPath = selectedPath;
+               // // await selection of the desired endpoint 
+               // await new Promise((resolve) => {
+               //    const quickPick = vscode.window.createQuickPick();
+               //    quickPick.items = uniquePathsArray.map(label => ({ label }));
+               //    quickPick.title = "Select the desired endpoint";
+               //    quickPick.placeholder = "Select the desired endpoint";
+               //    quickPick.onDidAccept(() => {
+               //       const selection = quickPick.selectedItems[0];
+               //       console.log(`Selected endpoint:`, selection);
+               //       remoteWSFolderPath = uniquePathsArray.find(conf => conf.label === selection.label);
+               //       quickPick.dispose();
+               //       resolve();
+               //    });
+               //    quickPick.onDidHide(() => {
+               //       quickPick.dispose();
+               //       remoteWSFolderPath = uniquePathsArray[0];
+               //       resolve();
+               //    });
+               //    quickPick.show();
+               // });
+            } else {
+               remoteWSFolderPath = uniquePathsArray[0];
+            }
+            console.log("remoteWSFolderPath:", remoteWSFolderPath);
+            const workingWSFolder = vscode.workspace.getWorkspaceFolder(param);
+            console.log("workingWSFolder:\n", beautify(JSON.stringify(workingWSFolder)));
+            const workingWSFolderPath = workingWSFolder.uri.scheme === 'file' ? workingWSFolder.uri.fsPath : workingWSFolder.uri.path;
+            console.log("workingWSFolderPath:\n", workingWSFolderPath);
+            const workspaceFolder = workingWSFolder;
+            const localFilePath = param.scheme === 'file' ? param.fsPath : param.path;
+            const endpointConfigDirectory = vscode.Uri.joinPath(configFile, '..');
+            const localRootPath = endpointConfigDirectory.with({
+               path: endpointConfigDirectory.path.replace(workspaceFolder.uri.path, '')
+            });
+            console.log("localRootPath:\n", beautify(JSON.stringify(localRootPath)));
+
+            // const remoteFile = localFilePath.replace(/\\/g, "/")
+            //    .replace(
+            //       path.posix.join(workingWSFolderPath.replace(/\\/g, "/"),
+            //          localRootPath.path.replace(/\\/g, "/")),
+            //       ""
+            //    );
+
+            remoteFilePath = localFilePath.replace(/\\/g, "/").replace(path.posix.join(workingWSFolderPath.replace(/\\/g, "/"), localRootPath.path.replace(/\\/g, "/")), remoteWSFolderPath);
+            console.log('remoteFilePath:', remoteFilePath);
+            return remoteFilePath;
+         }
+      } catch (err) {
+         vscode.window.showErrorMessage(`Rest API: Error retrieving Remote File Path: ${err}`);
+         debugger;
+         console.error(`(restApiGetRemoteFilePath) Error retrieving Remote File Path: ${err}`);
+      }
+   } else {
+      vscode.window.showWarningMessage(`Rest API: Cannot retrieve Remote File Uri for param type ${typeof param}: ${param}`);
+   }
+}
+
+async function restApiCopyRemoteFileUri(param, config = null) {
+   const uri = await restApiGetRemoteFileUri(param, config);
+   if (uri) {
+      try {
+         vscode.env.clipboard.writeText(uri);
+         console.log(`Remote file Uri copied to clipboard: ${uri}`);
+         vscode.window.showInformationMessage(`Remote file Uri copied to clipboard: ${uri}`);
+      } catch (error) {
+         vscode.window.showErrorMessage(`Error copying Remote file Uri to clipboard: ${error.message}`);         
+         console.error(`(restApiCopyRemoteFileUri) Error copying Remote file Uri to clipboard: ${error.message}`);         
+      }
+   } else {
+      vscode.window.showWarningMessage(`Failed to copy Remote file Uri to clipboard`);
+      console.error(`(restApiCopyRemoteFileUri) Failed to copy Remote file Uri to clipboard`);
+   }
+}
+
+async function restApiCopyRemoteFilePath(param, config = null) {
+   const remoteFilePath = await restApiGetRemoteFilePath(param, config);
+   if (remoteFilePath) {
+      try {
+         vscode.env.clipboard.writeText(remoteFilePath);
+         console.log(`Remote file path copied to clipboard: ${remoteFilePath}`);
+         // vscode.window.showInformationMessage(`Remote file path copied to clipboard: ${remoteFilePath}`);
+      } catch (error) {
+         vscode.window.showErrorMessage(`Error copying Remote file path to clipboard: ${error.message}`);         
+         console.error(`(restApiCopyRemoteFilePath) Error copying Remote file path to clipboard: ${error.message}`);         
+      }
+   } else {
+      console.error(`(restApiCopyRemoteFilePath) Failed to copy Remote file path to clipboard`);
+      vscode.window.showWarningMessage(`Failed to copy Remote file path to clipboard`);
+   }
+}
+
 
 async function restApiUpload(param, config = null) {
    const restApi = new RestApi();
@@ -533,6 +705,9 @@ module.exports = {
    restApiUpload,
    restApiSubmitJob,
    restApiViewManifest,
+   restApiGetRemoteFileUri,
+   restApiCopyRemoteFileUri,
+   restApiCopyRemoteFilePath,
    getXAuthToken,
    restApiDeleteCredentials
 };
