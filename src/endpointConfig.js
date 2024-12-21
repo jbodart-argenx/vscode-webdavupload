@@ -1,7 +1,8 @@
 const vscode = require("vscode");
 const beautify = require("js-beautify");
+const path = require("path");
 
-async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = false) {
+async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = false, uniquePaths = false) {
    // Finds the first matching config file, if any, in the current directory, nearest ancestor, or user's home directory.
    let configFile = null;
    let searchFolder;
@@ -46,9 +47,29 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
          restApiConfig = JSON.parse(Buffer.from(Uint8Content).toString('utf8'));
          // restApiConfig = JSON.parse(await vscode.workspace.fs.readFile(vscode.Uri.file(configFile)));  // wrong
       }
+      restApiConfig = restApiConfig.map(
+         config => Object.entries(config)
+            .filter(([key, val]) => (val != null && typeof val === 'object' && typeof val.url === 'string'))
+            .map(([key, val]) => {
+               let url, path, loc;
+               try {
+                  url = val.url;
+                  host = new URL(val.url).host;
+                  path = new URL(val.url).pathname;
+                  // "/content/66c7e5fa-58a2-4e98-9573-6ec7282f5d2f/proxy/xartest/lsaf/webdav/repo/clinical/test/indic/cdisc-pilot-0001/"
+                  if (/^(?:\/content\/[\da-f-]+\/proxy\/\w+)?\/lsaf\/webdav\/(work|repo)/.test(path)) {
+                     loc = path.match(/(?:\/content\/[\da-f-]+\/proxy\/\w+)?\/lsaf\/webdav\/(work|repo)/)[1];
+                     path = path.replace(/^(?:\/content\/[\da-f-]+\/proxy\/\w+)?\/lsaf\/webdav\/(work|repo)/, '');
+                  }
+                  return ({url, host, loc, path, label: key});
+               } catch (error) {
+                  return ({url, host, loc, path, label: key, error: error.message});
+               }
+            })
+         ).map(item => item[0]);
       if (onlyRepo) {
          restApiConfig = restApiConfig.filter(conf => {
-            return (/\/repo\b/.test(conf?.label ||'') || /\/repo\b/.test(conf?.["/"] || ''));
+            return (/\/repo\b/.test(conf?.label ||'') || /\/repo\b/.test(conf?.path || ''));
          });
       }
    } catch (error) {
@@ -60,21 +81,39 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
    let allEndpointsConfig;
    let config = {};
    if (Array.isArray(restApiConfig)) {
-      const configChoices = restApiConfig.map((config, index) =>
-         config.label || "Config " + (index + 1).toString()
-      );
-      const selectedConfig = await vscode.window.showQuickPick(configChoices, {
-         placeHolder: "Choose a remote location",
-         canPickMany: false,
-      });
-      if (selectedConfig == null) {
-         return;
+      if (uniquePaths) {
+         const endpointConfigDirectory = vscode.Uri.joinPath(configFile, '..');
+
+         const relativeWorkingDir = absoluteWorkingDir.path
+            .slice(endpointConfigDirectory.path.length)
+            .replace(/\\/g, "/"); // On Windows replace \ with /
+         console.log('(getEndpointConfigForCurrentPath) relativeWorkingDir:', relativeWorkingDir);
+
+         const filePaths = restApiConfig.map(conf => conf.path);
+         const uniquePathsList = {};
+         filePaths.forEach((path, index) => {
+            if(!uniquePathsList[path]) uniquePathsList[path] = [];
+            uniquePathsList[path].push({...restApiConfig[index], configFile });
+         });
+         //
+         return uniquePathsList;
+      } else {
+         const configChoices = restApiConfig.map((config, index) =>
+            config.label || "Config " + (index + 1).toString()
+         );
+         const selectedConfig = await vscode.window.showQuickPick(configChoices, {
+            placeHolder: "Choose a remote location",
+            canPickMany: false,
+         });
+         if (selectedConfig == null) {
+            return;
+         }
+         allEndpointsConfig =
+            restApiConfig[
+            configChoices.findIndex((config) => config === selectedConfig)
+            ];
+         config.label = selectedConfig;
       }
-      allEndpointsConfig =
-         restApiConfig[
-         configChoices.findIndex((config) => config === selectedConfig)
-         ];
-      config.label = selectedConfig;
    } else {
       allEndpointsConfig = restApiConfig;
    }
