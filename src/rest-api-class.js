@@ -1658,9 +1658,10 @@ class RestApi {
 
       const url = new URL(this.config.remoteEndpoint.url);
       this.host = url.hostname;
-      if (`${url}`.test(/^https:\/\/([\w-]+).ondemand.sas.com\/lsaf\/webdav\/(work|repo)(\/.*)$/)) {
-         this.remoteFileUri = `${url}${this.remoteFile}`.replace(/^https:\/\/([\w-]+).ondemand.sas.com\/lsaf\/webdav\/(work|repo)(\/.*)$/, 'lsaf-$2://$1$3');
+      if (/^https:\/\/([\w-]+).ondemand.sas.com\/lsaf\/webdav\/(work|repo)(\/.*)$/.test(`${url.href}`)) {
+         this.remoteFileUri = `${url.href}${this.remoteFile}`.replace(/^https:\/\/([\w-]+).ondemand.sas.com\/lsaf\/webdav\/(work|repo)(\/.*)$/, 'lsaf-$2://$1$3');
       } else {
+         debugger ;
          this.remoteFileUri = null;
       }
    }
