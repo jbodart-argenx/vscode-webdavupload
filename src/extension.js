@@ -2,6 +2,7 @@ const vscode = require("vscode");
 const fs = require("fs");
 const path = require("path");
 const { initWebR, webR } = require('./read_dataset.js');
+const { uriFromString } = require('./uri.js');
 
 let webrRepo;
 
@@ -94,7 +95,7 @@ async function activate(context) {
             {
                 webviewOptions: {
                     enableScripts: true,
-                    localResourceRoots: context ? [vscode.Uri.file(path.join(context.extensionPath, 'media'))] : [] ,
+                    localResourceRoots: context ? [uriFromString(path.join(context.extensionPath, 'media'))] : [] ,
                     retainContextWhenHidden: true,
                     enableCommandUris: true // Enable registered commands to be called as URIs from webview HTML e.g.:
 											// <a href="command:table-viewer.showMessage?%22Hello%22">Say 'Hello' with Command Uri</a>
@@ -114,7 +115,7 @@ async function activate(context) {
                 vscode.ViewColumn.One,
                 {
                     enableScripts: true,
-                    localResourceRoots: context ? [vscode.Uri.file(path.join(context.extensionPath, 'react-big-table/build'))] : []
+                    localResourceRoots: context ? [uriFromString(path.join(context.extensionPath, 'react-big-table/build'))] : []
                 }
             );
 
@@ -122,7 +123,7 @@ async function activate(context) {
             let html = fs.readFileSync(appPath, 'utf8');
 
             // Update the paths to the static files
-            html = html.replace(/\/static\//g, `${panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'react-big-table', 'build', 'static'))).toString()}/`);
+            html = html.replace(/\/static\//g, `${panel.webview.asWebviewUri(uriFromString(path.join(context.extensionPath, 'react-big-table', 'build', 'static'))).toString()}/`);
 
             panel.webview.html = html;
         })
