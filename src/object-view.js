@@ -1,6 +1,6 @@
 const vscode = require("vscode");
 const fs = require('fs');
-const { authTokens } = require('./auth.js');
+const { getAuthToken } = require('./auth.js');
 const beautify = require('js-beautify');
 const { axios } = require("./axios-cookie-jar.js");
 const { showMultiLineText } = require("./multiLineText.js");
@@ -75,7 +75,7 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                      if (fileExt) fileExt = `.${fileExt}`;
                      let headers = {};
                      await restApi.logon();
-                     let authToken = authTokens[new URL(message.url).hostname];
+                     let authToken = getAuthToken[new URL(message.url).hostname];
                      const basicAuth = (restApi.username && restApi.encryptedPassword) ?
                         "Basic " + Buffer.from(restApi.username + ":" + restApi.encryptedPassword).toString('base64') :
                         undefined;
