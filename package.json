@@ -20,7 +20,42 @@
         "dependencies": true,
         "yarn": false
     },
+    "capabilities": {
+        "virtualWorkspaces": true
+    },
+    "extensionKind": [
+        "workspace",
+        "ui"
+    ],
     "contributes": {
+        "configuration": {
+            "type": "object",
+            "title": "Extension Settings",
+            "properties": {
+                "lsaf-rest-api.defaultEndpoints": {
+                    "type": "array",
+                    "default": [
+                        {
+                            "label": "lsafleeds/repo",
+                            "url": "https://lsafleeds.ondemand.sas.com/lsaf/webdav/repo/"
+                        },
+                        {
+                            "label": "lsafleeds/work",
+                            "url": "https://lsafleeds.ondemand.sas.com/lsaf/webdav/work/"
+                        },
+                        {
+                            "label": "lsafgunners/repo",
+                            "url": "https://lsafgunners.ondemand.sas.com/lsaf/webdav/repo/"
+                            },
+                            {
+                            "label": "lsafgunners/work",
+                            "url": "https://lsafgunners.ondemand.sas.com/lsaf/webdav/work/"
+                            }
+                    ],
+                    "description": "Default endpoints for the lsaf-rest-api extension"
+                }
+            }
+        },
         "customEditors": [
             {
                 "viewType": "jbodart-argenx-lsaf-restapi-upload-extension.customDatasetPreviewer",
@@ -42,7 +77,12 @@
         "commands": [
             {
                 "command": "jbodart-argenx-lsaf-restapi-upload-extension.getXAuthToken",
-                "title": "Get LSAF Token",
+                "title": "LSAF Rest API: Get Auth Token",
+                "category": "LSAF"
+            },
+            {
+                "command": "jbodart-argenx-lsaf-restapi-upload-extension.deleteCredentials",
+                "title": "LSAF Rest API: Delete Credentials",
                 "category": "LSAF"
             },
             {
@@ -53,6 +93,16 @@
             {
                 "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
                 "title": "LSAF Rest API: Upload",
+                "category": "LSAF"
+            },
+            {
+                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
+                "title": "LSAF Rest API: Copy LSAF File Uri",
+                "category": "LSAF"
+            },
+            {
+                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
+                "title": "LSAF Rest API: Copy LSAF Path",
                 "category": "LSAF"
             },
             {
@@ -113,6 +163,14 @@
                     "group": "LSAF"
                 },
                 {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
+                    "group": "LSAF"
+                },
+                {
                     "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
                     "when": "!explorerResourceIsFolder",
                     "group": "LSAF"
@@ -162,6 +220,28 @@
                     "group": "LSAF"
                 },
                 {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
+                    "when": "resourceExtname == '.job'",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
+                    "when": "resourceExtname == '.mnf'",
+                    "group": "LSAF"
+                },
+                {
                     "when": "editorTextFocus",
                     "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
                     "group": "LSAF"
@@ -181,7 +261,25 @@
                     "group": "LSAF"
                 },
                 {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
+                    "group": "LSAF"
+                },
+                {
                     "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
+                    "when": "resourceExtname == '.job'",
+                    "group": "LSAF"
+                },
+                {
+                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
+                    "when": "resourceExtname == '.mnf'",
                     "group": "LSAF"
                 }
             ]
