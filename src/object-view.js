@@ -11,6 +11,7 @@ const { showTableView } = require("./json-table-view.js");
 const { read_dataset, read_sas, read_xpt, read_rds } = require("./read_dataset.js");
 const tmp = require("tmp");
 tmp.setGracefulCleanup();   // remove all controlled temporary objects on process exit
+const { uriFromString } = require('./uri.js');
 
 // This is the async function that opens a webview and displays an object / collects edits from the user
 // Even though the function does not use await, marking a function as async ensures it returns a promise.
@@ -197,7 +198,7 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                                  }
                               } else if (response.data instanceof Buffer) {
                                  try {
-                                    await vscode.workspace.fs.writeFile(vscode.Uri.file(tempFile.name), response.data);
+                                    await vscode.workspace.fs.writeFile(uriFromString(tempFile.name), response.data);
                                     console.log(`(getObjectView) openUrl: saved to temporary file: ${tempFile.name}`);
                                  } catch (error) {
                                     debugger;
@@ -205,7 +206,7 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                                  }
                               } else if (typeof response.data === 'string') {
                                  try {
-                                    await vscode.workspace.fs.writeFile(vscode.Uri.file(tempFile.name), Buffer.from(response.data));
+                                    await vscode.workspace.fs.writeFile(uriFromString(tempFile.name), Buffer.from(response.data));
                                     console.log(`(getObjectView) openUrl: saved to temporary file: ${tempFile.name}`);
                                  } catch (error) {
                                     debugger;
