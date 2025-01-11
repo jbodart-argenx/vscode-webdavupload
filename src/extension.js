@@ -24,7 +24,7 @@ const CustomDatasetPreviewerProvider = require("./custom-dataset-previewer.js");
 console.log('(extension.js) typeof CustomDatasetPreviewerProvider:', typeof CustomDatasetPreviewerProvider);
 
 console.log('extension.js - before require("./auth.js")');
-const { initializeSecretModule, authTokens } = require('./auth.js');
+const { initializeSecretModule, deleteAuthTokens } = require('./auth.js');
 console.log('extension.js - after require("./auth.js")');
 
 async function activate(context) {
@@ -211,11 +211,7 @@ exports.activate = activate;
 
 // this method is called when your extension is deactivated
 function deactivate() {
-    // Clean up by removing the tokens (optional, as they will be cleared anyway when the extension is deactivated)
-    const props = Object.getOwnPropertyNames(authTokens);
-    props.forEach(prop => {
-        delete authTokens[prop];
-    });
+    deleteAuthTokens('*');
 }
 
 exports.deactivate = deactivate;
