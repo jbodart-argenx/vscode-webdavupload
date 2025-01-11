@@ -40,12 +40,12 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                      updatedObject = undefined;
                      if (editable) {
                         // Return the updated object
-                        vscode.window.showInformationMessage('Updated object submitted');
+                        vscode.window.showInformationMessage('(getObjectView) Updated object submitted');
                         updatedObject = message.updatedObject;
-                        console.log('Updated Object:', updatedObject);
+                        console.log('(getObjectView) Updated Object:', updatedObject);
                      } else {
-                        vscode.window.showInformationMessage('Read-only object submitted');
-                        console.log('Original Object:', inputObject);
+                        vscode.window.showInformationMessage('(getObjectView) Read-only object submitted');
+                        console.log('(getObjectView) Original Object:', inputObject);
                      }
                      console.log('(getObjectView) Resolving Promise with updatedObject:', updatedObject);
                      resolve(updatedObject);
@@ -55,15 +55,15 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                   updatedObject = undefined;
                   if (editable) {
                      // Return the updated object
-                     vscode.window.showInformationMessage('Object cancelled');
-                     updatedObject = {message: "Cancelled"};
-                     console.log('Updated Object:', updatedObject);
+                     vscode.window.showInformationMessage(`(${title || 'getObjectView'}) Updated Object dismissed.`);
+                     updatedObject = {updatedObject, message: "(getObjectView) Object dismissed"};
+                     console.log(`(${title || 'getObjectView'}) Updated Object:`, updatedObject);
                   } else {
-                     vscode.window.showInformationMessage('Read-only object cancelled');
-                     console.log('Original Object:', inputObject);
+                     vscode.window.showInformationMessage(`(${title || 'getObjectView'}) Read-Only Object dismissed.`);
+                     console.log('(getObjectView) Original Object:', inputObject);
                   }
                   console.log('(getObjectView) Rejecting Promise with undefined Object:', updatedObject);
-                  reject("Cancelled");
+                  reject({ message: "(getObjectView) Object dismissed" });
                   panel.dispose(); // Close the webview panel
                break;
                case 'openUrl':
@@ -270,8 +270,8 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
 
       // If the panel is closed without submitting, reject the promise
       panel.onDidDispose(() => {
-         console.log("(getObjectView) Rejecting promise, input cancelled.")
-         reject("Input cancelled");
+         console.log("(getObjectView) Rejecting promise, input dismissed.")
+         reject("Input dismissed");
       });
    });
 }
