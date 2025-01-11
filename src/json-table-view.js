@@ -1,6 +1,6 @@
 // import * as vscode from "vscode";
 const vscode = require("vscode");
-const { authTokens } = require('./auth.js');
+const { getAuthToken } = require('./auth.js');
 const { axios } = require("./axios-cookie-jar.js");
 
 // eslint-disable-next-line require-await
@@ -52,7 +52,7 @@ async function showTableView(tableViewTitle, data, context, webViewTitle = "Tabl
                try {
                   const response = await axios.get(message.url,
                      {
-                        headers: { "X-Auth-Token": authTokens[this.host] },
+                        headers: { "X-Auth-Token": getAuthToken[this.host] },
                         maxRedirects: 5 // Optional, axios follows redirects by default
                      });
                   console.log('axios response:', response);
@@ -240,13 +240,13 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
          <meta name="viewport" content="width=device-width, initial-scale=1.0">
          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'self' 'nonce-${nonce}';">
          <title>JSON Table</title>
-         <style  nonce="${nonce}">
+         <style nonce="${nonce}">
             /* Styles for the shadow host */
             #shadow-host {
-               width: 100%;
-               height: 100%;
-               display: flex;
-               flex-direction: column;
+                  width: 100%;
+                  height: 100%;
+                  display: flex;
+                  flex-direction: column;
             }
             #header {
                   flex: 0 0 auto;
@@ -281,32 +281,27 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
       </head>
       <body>
          <div id="shadow-host"></div>
-         <script  nonce="${nonce}">
+         <script nonce="${nonce}">
             const vscode = acquireVsCodeApi();
 
-            function updateTable(jdata) {
-                  if (typeof data === 'string') data = JSON.parse(jsonData);
+            function updateTable(jsonData) {
+                  if (typeof jsonData === 'string') jsonData = JSON.parse(jsonData);
                   const tableHeader = shadowRoot.getElementById('dataTable').getElementsByTagName('thead')[0];
                   const tableBody = shadowRoot.getElementById('dataTable').getElementsByTagName('tbody')[0];
                   tableHeader.innerHTML = '';
                   tableBody.innerHTML = '';
-                  /*data.forEach(item => {
-                     const row = document.createElement('tr');
-                     row.innerHTML = '<td>'+'item.id+'</td><td>'+item.name+'</td>';
-                     tableBody.appendChild(row);
-                  });*/
-                  columns = [...data].reduce((acc, row) => [...(new Set([...acc, ...Object.keys(row)]))], []);
+
+                  const columns = [...jsonData].reduce((acc, row) => [...new Set([...acc, ...Object.keys(row)])], []);
                   console.log('columns:', columns);
 
                   // Generate table headers
-                  tableHeader.innerHTML = '<tr><th>#</th>'+columns.map(column => '<th>'+column+'</th>').join('')+'</tr>';
+                  tableHeader.innerHTML = '<tr><th>#</th>' + columns.map(column => '<th>' + column + '</th>').join('') + '</tr>';
                   
                   // Generate table rows with index - set values of cells that do not exist in a row to '' (instead of the default 'undefined')
-                  tableBody.innerHTML = data.map((item, index) => {
-                     const row = columns.map(column => '<td>'+(item[column] || '')+'</td>').join('');
-                     return '<tr><th>'+(index + 1)+'</th>'+row+'</tr>';
+                  tableBody.innerHTML = jsonData.map((item, index) => {
+                     const row = columns.map(column => '<td>' + (item[column] || '') + '</td>').join('');
+                     return '<tr><th>' + (index + 1) + '</th>' + row + '</tr>';
                   }).join('');
-
             }
 
             // Create a shadow root
@@ -314,12 +309,20 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
             const shadowRoot = shadowHost.attachShadow({ mode: 'open' });
 
             // Append styles and content to the shadow root
-            shadowRoot.innerHTML =  \`${shadowRootInnerHtml}\`;
+            shadowRoot.innerHTML = \`
+                  <div id="header">
+                     <h1>Webview Example</h1>
+                     <button id="requestData">Request Data</button>
+                  </div>
+                  <div id="container">
+                     <table id="dataTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                     </table>
+                  </div>
+            \`;
 
-            // updateTable(\`${JSON.stringify(jsonData)}\`);
-            
-                  
-            document.getElementById('requestData').addEventListener('click', () => {
+            shadowRoot.getElementById('requestData').addEventListener('click', () => {
                   vscode.postMessage({ command: 'requestData' });
             });
 
@@ -333,16 +336,16 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
             });
 
             document.querySelectorAll('a').forEach(link => {
-               link.addEventListener('click', function(event) {
-                  event.preventDefault(); // Prevent default link behavior
-                  const url = this.href; // Get the URL from the link
-                  msg = {
-                     command: 'openUrl',
-                     url: url
-                  };
-                  console.log('vscode.postMessage:', JSON.stringify(msg));
-                  vscode.postMessage(msg);
-               });
+                  link.addEventListener('click', function(event) {
+                     event.preventDefault(); // Prevent default link behavior
+                     const url = this.href; // Get the URL from the link
+                     const msg = {
+                        command: 'openUrl',
+                        url: url
+                     };
+                     console.log('vscode.postMessage:', JSON.stringify(msg));
+                     vscode.postMessage(msg);
+                  });
             });
          </script>
       </body>
