@@ -4,6 +4,7 @@ const path = require("path");
 const beautify = require("js-beautify");
 const { createZip, extractZip } = require("./zip.js");
 const { getObjectView } = require("./object-view.js");
+const { uriFromString } = require("./uri.js");
 
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
@@ -21,7 +22,7 @@ const { getEndpointConfigForCurrentPath } = require('./endpointConfig.js');
 async function restApiZipUploadAndExpand(param, config = null) {
    const restApi = new RestApi();
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      param = uriFromString(param);
    }
    if (param instanceof vscode.Uri) {
       vscode.window.showInformationMessage(`Rest API: Zip, Upload and Expanding Local Folder URI: ${param.fsPath}`);
@@ -89,7 +90,7 @@ async function restApiDeleteCredentials(host) {
 async function restApiGetRemoteFileUri(param, config = null) {
    const restApi = new RestApi();
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      param = uriFromString(param);
    }
    if (param instanceof vscode.Uri) {
       vscode.window.showInformationMessage(`Rest API: Getting Remote File URI: ${param.fsPath}`);
@@ -127,7 +128,7 @@ async function restApiGetRemoteFilePath(param, config = null) {
    let remoteFilePath = '';
    let remoteWSFolderPath = '';
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      param = uriFromString(param);
    }
    if (param instanceof vscode.Uri) {
       vscode.window.showInformationMessage(`Rest API: Getting Remote File Path: ${param.fsPath}`);
@@ -259,7 +260,7 @@ async function restApiCopyRemoteFilePath(param, config = null) {
 async function restApiUpload(param, config = null) {
    const restApi = new RestApi();
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      param = uriFromString(param);
    }
    if (param instanceof vscode.Uri) {
       vscode.window.showInformationMessage(`Rest API: Uploading File URI: ${param.fsPath}`);
@@ -297,7 +298,7 @@ async function restApiCompare(param, config = null) {
    let localFile;
    const restApi = new RestApi();
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      param = uriFromString(param);
    }
    try {
       if (config && config.localRootPath && config.remoteEndpoint) {
@@ -493,7 +494,7 @@ async function getXAuthToken(host) {
 async function restApiDownload(param, config = null, overwrite = null) {
    const restApi = new RestApi();
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      param = uriFromString(param);
    }
    try {
       if (config && config.localRootPath && config.remoteEndpoint) {
@@ -529,7 +530,7 @@ async function restApiView(param, config = null, expectedMd5sum = null) {
    console.log('(restApiView) expectedMd5sum:', expectedMd5sum);
    const restApi = new RestApi();
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      param = uriFromString(param);
    }
    try {
       if (config && config.localRootPath && config.remoteEndpoint) {
