@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
    // Adjust on window resize
    window.addEventListener('resize', adjustTableHeight);
 
-   // Example data fetching and population
+   // initial data fetching and population
    fetchData().then(data => {
       populateTable(data);
       updateMetadata(data);
@@ -168,3 +168,18 @@ function sortTableByColumn(columnIndex) {
 function sendMessage() {
    vscode.postMessage({ command: 'alert', text: 'Hello from the webview!' });
 }
+
+
+window.addEventListener('message', event => {
+   const message = event.data;
+
+   if (message.command === 'updateData') {
+      populateTable(message.data);
+      updateMetadata(message.metadata);
+   }
+});
+
+// Example button click to request data update
+document.getElementById('update-button').addEventListener('click', () => {
+   vscode.postMessage({ command: 'requestData' });
+});
