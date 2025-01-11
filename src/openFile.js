@@ -1,6 +1,7 @@
 const vscode = require("vscode");
 const os = require('os');
 const { exec } = require('child_process');
+const { uriFromString } = require('./uri.js');
 
 function openFileWithDefaultApp(filePath) {
    if (filePath instanceof vscode.Uri) {
@@ -20,7 +21,7 @@ function openFileWithDefaultApp(filePath) {
          }
       });
    } else {
-      vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath));
+      vscode.commands.executeCommand('vscode.open', uriFromString(filePath));
    }
 }
 
