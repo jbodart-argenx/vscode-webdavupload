@@ -189,7 +189,7 @@ async function restApiGetRemoteFilePath(param, config = null) {
             }
             console.log("remoteWSFolderPath:", remoteWSFolderPath);
             const workingWSFolder = vscode.workspace.getWorkspaceFolder(param);
-            console.log("workingWSFolder:\n", beautify(JSON.stringify(workingWSFolder)));
+            console.log("workingWSFolder:\n", beautify(JSON.stringify(workingWSFolder))); 
             const workingWSFolderPath = workingWSFolder.uri.scheme === 'file' ? workingWSFolder.uri.fsPath : workingWSFolder.uri.path;
             console.log("workingWSFolderPath:\n", workingWSFolderPath);
             const workspaceFolder = workingWSFolder;
@@ -225,7 +225,7 @@ async function restApiCopyRemoteFileUri(param, config = null) {
    const uri = await restApiGetRemoteFileUri(param, config);
    if (uri) {
       try {
-         vscode.env.clipboard.writeText(uri);
+         vscode.env.clipboard.writeText(uri.toString());
          console.log(`Remote file Uri copied to clipboard: ${uri}`);
          vscode.window.showInformationMessage(`Remote file Uri copied to clipboard: ${uri}`);
       } catch (error) {
