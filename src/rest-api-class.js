@@ -1366,7 +1366,7 @@ class RestApi {
             || (/^application\/octet-stream(;|$)/.test(this.fileContentType) && ext === '.rds')
          ) {
             const tempFile = tmp.fileSync({ postfix: ext, discardDescriptor: true });
-            const tempFileUri = vscode.Uri.file(tempFile.name);
+            const tempFileUri = uriFromString(tempFile.name);
             let uint8Array;
             try {
                if (Buffer.isBuffer(this.fileContents[0])){
@@ -1520,12 +1520,12 @@ class RestApi {
                }         
                await vscode.commands.executeCommand(
                   "vscode.diff",
-                  vscode.Uri.file(path.normalize(this.tempFiles[i].name)),
+                  uriFromString(path.normalize(this.tempFiles[i].name)),
                   i === 0 ?
                      (this.localFile?.path ?
                         this.localFile :
-                        vscode.Uri.file(path.normalize(this.localFile))) :
-                     vscode.Uri.file(path.normalize(this.tempFiles[i - 1].name)),
+                        uriFromString(path.normalize(this.localFile))) :
+                     uriFromString(path.normalize(this.tempFiles[i - 1].name)),
                   fileName + ` (${this.config.label || this.host.split(".")[0]}${compVersionLabel} ↔ ${baseVersionLabel})`,
                   {
                      preview: false,
