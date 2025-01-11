@@ -1,11 +1,31 @@
 const vscode = require("vscode");
 
-// Global variable to store authentication tokens (in memory only)
-const authTokens = {};
+function defineAccessTokenFunctions() {
+   // Closure variable to store authentication tokens (in memory only)
+   const authTokens = {};
 
-function setAuthTokens (key, value) {
-   authTokens[key] = value;
+   function setAuthToken (key, value) {
+      authTokens[key] = value;
+   }
+
+   function getAuthToken (key) {
+      return authTokens[key];
+   }
+
+   function deleteAuthTokens (key) {
+      if (key === '*') {
+         const keys = Object.getOwnPropertyNames(authTokens);
+         keys.forEach(key => {
+            delete authTokens[key];
+         });
+      }
+      delete authTokens[key];
+   }
+   return { setAuthToken, getAuthToken, deleteAuthTokens };
 }
+
+const { setAuthToken, getAuthToken, deleteAuthTokens } = defineAccessTokenFunctions();
+
 let secretStorage;
 
 // Initialize the secret module with SecretStorage from the activate function
@@ -41,7 +61,6 @@ class CredentialStore{
    }
 
    async DeleteCredential(key) {
-      debugger ;
       await secretStorage.delete(key);
    }
 }
@@ -106,6 +125,7 @@ async function storeCredentials(key, username, password) {
 
 async function deleteCredentials(key) {
    if (!key) throw new Error('deleteCredentials: no hostname provided, aborting.');
+   deleteAuthTokens(key);
    await credStore.DeleteCredential(key);
    const shortkey = String(key).split('.')[0];
    if (process.env[`${shortkey}_encpasswd`]) {
@@ -130,5 +150,5 @@ async function deleteCredentials(key) {
 
 module.exports = { 
    storeCredentials, askForCredentials, getCredentials, deleteCredentials, EMPTY_CREDENTIALS, credStore, CredentialStore,
-   initializeSecretModule, setAuthTokens, authTokens
+   initializeSecretModule, setAuthToken, getAuthToken, deleteAuthTokens
 };
