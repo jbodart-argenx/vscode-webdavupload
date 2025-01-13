@@ -3,7 +3,7 @@
 
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
-const { glob } = require('glob');
+// const { glob } = require('glob');
 
 /** @type {import('webpack').Configuration} */
 const config = {
@@ -58,10 +58,10 @@ const config = {
                     from: path.resolve(__dirname, 'webr-repo'),
                     to: 'webr-repo'
                 },
-                {
-                    from: 'react-big-table/build',
-                    to: 'react-big-table/build'
-                }
+                // {
+                //     from: 'react-big-table/build',
+                //     to: 'react-big-table/build'
+                // }
             ],
         }),
     ],
