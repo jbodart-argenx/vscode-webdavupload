@@ -2,7 +2,7 @@
     "name": "lsaf-rest-api",
     "displayName": "LSAF Rest API Upload",
     "description": "Compares & uploads local files to a remote LSAF host using Rest API",
-    "version": "1.2.3",
+    "version": "1.3.0",
     "publisher": "jbodart-argenx",
     "license": "MIT",
     "engines": {
@@ -290,7 +290,7 @@
         "compile": "webpack --mode development",
         "watch": "webpack --watch",
         "eslint": "eslint .",
-        "vsce": "npx vsce package",
+        "publish": "npx vsce package",
         "start": "code --extensionDevelopmentPath=.",
         "test-read_sas": "cd ./test && node ./read_sas.test.js"
     },
