@@ -38,6 +38,26 @@
             "group": "watch",
             "reveal": "never"
          }
+      },
+      {
+         "label": "start-extension",
+         "type": "shell",
+         "command": "npm run start",
+         "problemMatcher": []
+      },
+      {
+         "label": "npm: compile",
+         "type": "npm",
+         "script": "compile",
+         "group": "build",
+         "problemMatcher": []
+      },
+      {
+         "label": "npm: vscode:prepublish",
+         "type": "npm",
+         "script": "vscode:prepublish",
+         "group": "build",
+         "problemMatcher": []
       }
    ]
 }
