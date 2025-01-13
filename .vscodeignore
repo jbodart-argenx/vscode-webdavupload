@@ -13,3 +13,6 @@ src/
 react-big-table/**
 !react-big-table/build/
 !react-big-table/build/**
+eslint.config.mjs
+examples_request.md
+test-glob.js
