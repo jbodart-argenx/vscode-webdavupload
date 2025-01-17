@@ -1,347 +1,351 @@
 {
-    "name": "lsaf-rest-api",
-    "displayName": "LSAF Rest API Upload",
-    "description": "Compares & uploads local files to a remote LSAF host using Rest API",
-    "version": "1.3.0",
-    "publisher": "jbodart-argenx",
-    "license": "MIT",
-    "engines": {
-        "vscode": "^1.16.0"
-    },
-    "categories": [
-        "Other"
-    ],
-    "activationEvents": [
-        "onStartupFinished"
-    ],
-    "main": "./dist/extension.js",
-    "type": "commonjs",
-    "vsce": {
-        "dependencies": true,
-        "yarn": false
-    },
-    "capabilities": {
-        "virtualWorkspaces": true
-    },
-    "extensionKind": [
-        "workspace",
-        "ui"
-    ],
-    "contributes": {
-        "configuration": {
-            "type": "object",
-            "title": "Extension Settings",
-            "properties": {
-                "lsaf-rest-api.defaultEndpoints": {
-                    "type": "array",
-                    "default": [
-                        {
-                            "label": "lsafleeds/repo",
-                            "url": "https://lsafleeds.ondemand.sas.com/lsaf/webdav/repo/"
-                        },
-                        {
-                            "label": "lsafleeds/work",
-                            "url": "https://lsafleeds.ondemand.sas.com/lsaf/webdav/work/"
-                        },
-                        {
-                            "label": "lsafgunners/repo",
-                            "url": "https://lsafgunners.ondemand.sas.com/lsaf/webdav/repo/"
-                        },
-                        {
-                            "label": "lsafgunners/work",
-                            "url": "https://lsafgunners.ondemand.sas.com/lsaf/webdav/work/"
-                        }
-                    ],
-                    "description": "Default endpoints for the lsaf-rest-api extension"
-                }
+  "name": "lsaf-rest-api",
+  "displayName": "LSAF Rest API Upload",
+  "description": "Compares & uploads local files to a remote LSAF host using Rest API",
+  "version": "1.3.0",
+  "publisher": "jbodart-argenx",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.16.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./src/extension.js",
+  "type": "commonjs",
+  "vsce": {
+    "dependencies": true,
+    "yarn": false
+  },
+  "capabilities": {
+    "virtualWorkspaces": true
+  },
+  "extensionKind": [
+    "workspace",
+    "ui"
+  ],
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "Extension Settings",
+      "properties": {
+        "lsaf-rest-api.defaultEndpoints": {
+          "type": "array",
+          "default": [
+            {
+              "label": "lsafleeds/repo",
+              "url": "https://lsafleeds.ondemand.sas.com/lsaf/webdav/repo/"
+            },
+            {
+              "label": "lsafleeds/work",
+              "url": "https://lsafleeds.ondemand.sas.com/lsaf/webdav/work/"
+            },
+            {
+              "label": "lsafgunners/repo",
+              "url": "https://lsafgunners.ondemand.sas.com/lsaf/webdav/repo/"
+            },
+            {
+              "label": "lsafgunners/work",
+              "url": "https://lsafgunners.ondemand.sas.com/lsaf/webdav/work/"
             }
-        },
-        "customEditors": [
-            {
-                "viewType": "jbodart-argenx-lsaf-restapi-upload-extension.customDatasetPreviewer",
-                "displayName": "Custom Dataset Previewer",
-                "selector": [
-                    {
-                        "filenamePattern": "*.sas7bdat"
-                    },
-                    {
-                        "filenamePattern": "*.xpt"
-                    },
-                    {
-                        "filenamePattern": "*.rds"
-                    }
-                ],
-                "priority": "default"
-            }
-        ],
-        "commands": [
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.getXAuthToken",
-                "title": "LSAF Rest API: Get Auth Token",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.deleteCredentials",
-                "title": "LSAF Rest API: Delete Credentials",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.showReactBigTableWebview",
-                "title": "React Big Table",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
-                "title": "LSAF Rest API: Upload",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
-                "title": "LSAF Rest API: Copy LSAF File Uri",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
-                "title": "LSAF Rest API: Copy LSAF Path",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
-                "title": "LSAF Rest API: Compare",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiProperties",
-                "title": "LSAF Rest API: Get Properties",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
-                "title": "LSAF Rest API: Get Versions",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
-                "title": "LSAF Rest API: Submit Job",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
-                "title": "LSAF Rest API: View Manifest",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiFolderContents",
-                "title": "LSAF Rest API: Get Remote Folder Contents",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.localFolderContents",
-                "title": "LSAF Rest API: Get Local Folder Contents",
-                "category": "LSAF"
-            },
-            {
-                "command": "jbodart-argenx-lsaf-restapi-upload-extension.compareFolderContents",
-                "title": "LSAF Rest API: Compare Folder Contents",
-                "category": "LSAF"
-            }
-        ],
-        "menus": {
-            "explorer/context": [
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
-                    "when": "!explorerResourceIsFolder",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
-                    "when": "!explorerResourceIsFolder",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiProperties",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
-                    "when": "!explorerResourceIsFolder",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
-                    "title": "LSAF Rest API: Submit Job",
-                    "when": "resourceExtname == '.job'",
-                    "category": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
-                    "title": "LSAF Rest API: View Manifest",
-                    "when": "resourceExtname == '.mnf'",
-                    "category": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiFolderContents",
-                    "when": "explorerResourceIsFolder",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.localFolderContents",
-                    "when": "explorerResourceIsFolder",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.compareFolderContents",
-                    "when": "explorerResourceIsFolder",
-                    "group": "LSAF"
-                }
-            ],
-            "editor/context": [
-                {
-                    "when": "editorTextFocus",
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
-                    "group": "LSAF"
-                },
-                {
-                    "when": "editorTextFocus",
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
-                    "group": "LSAF"
-                },
-                {
-                    "when": "editorTextFocus",
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiProperties",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
-                    "when": "resourceExtname == '.job'",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
-                    "when": "resourceExtname == '.mnf'",
-                    "group": "LSAF"
-                },
-                {
-                    "when": "editorTextFocus",
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
-                    "group": "LSAF"
-                }
-            ],
-            "editor/title/context": [
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiProperties",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
-                    "when": "resourceExtname == '.job'",
-                    "group": "LSAF"
-                },
-                {
-                    "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
-                    "when": "resourceExtname == '.mnf'",
-                    "group": "LSAF"
-                }
-            ]
+          ],
+          "description": "Default endpoints for the lsaf-rest-api extension"
         }
+      }
     },
-    "scripts": {
-        "vscode:prepublish": "webpack --mode production",
-        "compile": "webpack --mode development",
-        "watch": "webpack --watch",
-        "eslint": "eslint .",
-        "publish": "npx vsce package",
-        "start": "code --extensionDevelopmentPath=.",
-        "test-read_sas": "cd ./test && node ./read_sas.test.js"
-    },
-    "homepage": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/blob/master/README.md",
-    "bugs": {
-        "url": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/issues"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload"
-    },
-    "resolutions": {
-        "**/event-stream": "3.3.4"
-    },
-    "devDependencies": {
-        "@babel/core": "^7.26.0",
-        "@babel/preset-env": "^7.26.0",
-        "@types/mocha": "^10.0.9",
-        "@types/node": "^22.9.0",
-        "@typescript-eslint/eslint-plugin": "^8.14.0",
-        "@vscode/test-electron": "^2.4.1",
-        "@vscode/vsce": "^3.2.1",
-        "babel-loader": "^9.2.1",
-        "copy-webpack-plugin": "^12.0.2",
-        "eslint": "^9.18.0",
-        "eslint-plugin-import": "^2.31.0",
-        "eslint-plugin-promise": "^7.1.0",
-        "eslint-plugin-unicorn": "^56.0.0",
-        "glob": "^11.0.0",
-        "html-webpack-plugin": "^5.6.3",
-        "ts-loader": "^9.5.1",
-        "typescript": "^5.6.3",
-        "webpack": "^5.96.1",
-        "webpack-cli": "^5.1.4"
-    },
-    "dependencies": {
-        "adm-zip": "^0.5.16",
-        "axios": "^1.7.7",
-        "axios-cookiejar-support": "^5.0.3",
-        "event-stream": "4.0.1",
-        "form-data": "^4.0.1",
-        "globals": "^15.14.0",
-        "isbinaryfile": "^5.0.4",
-        "js-beautify": "^1.15.1",
-        "original-fs": "^1.2.0",
-        "path": "^0.12.7",
-        "readable-stream": "^4.5.2",
-        "strip-bom-buf": "^4.0.0",
-        "tmp": "0.2.3",
-        "tough-cookie": "^5.0.0",
-        "webr": "^0.4.2",
-        "xml2js": "^0.6.2"
+    "customEditors": [
+      {
+        "viewType": "jbodart-argenx-lsaf-restapi-upload-extension.customDatasetPreviewer",
+        "displayName": "Custom Dataset Previewer",
+        "selector": [
+          {
+            "filenamePattern": "*.sas7bdat"
+          },
+          {
+            "filenamePattern": "*.xpt"
+          },
+          {
+            "filenamePattern": "*.rds"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.getXAuthToken",
+        "title": "LSAF Rest API: Get Auth Token",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.deleteCredentials",
+        "title": "LSAF Rest API: Delete Credentials",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.showReactBigTableWebview",
+        "title": "React Big Table",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
+        "title": "LSAF Rest API: Upload",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
+        "title": "LSAF Rest API: Copy LSAF File Uri",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
+        "title": "LSAF Rest API: Copy LSAF Path",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
+        "title": "LSAF Rest API: Compare",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiProperties",
+        "title": "LSAF Rest API: Get Properties",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
+        "title": "LSAF Rest API: Get Versions",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
+        "title": "LSAF Rest API: Submit Job",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
+        "title": "LSAF Rest API: View Manifest",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiFolderContents",
+        "title": "LSAF Rest API: Get Remote Folder Contents",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.localFolderContents",
+        "title": "LSAF Rest API: Get Local Folder Contents",
+        "category": "LSAF"
+      },
+      {
+        "command": "jbodart-argenx-lsaf-restapi-upload-extension.compareFolderContents",
+        "title": "LSAF Rest API: Compare Folder Contents",
+        "category": "LSAF"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
+          "when": "!explorerResourceIsFolder",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
+          "when": "!explorerResourceIsFolder",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiProperties",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
+          "when": "!explorerResourceIsFolder",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
+          "title": "LSAF Rest API: Submit Job",
+          "when": "resourceExtname == '.job'",
+          "category": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
+          "title": "LSAF Rest API: View Manifest",
+          "when": "resourceExtname == '.mnf'",
+          "category": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiFolderContents",
+          "when": "explorerResourceIsFolder",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.localFolderContents",
+          "when": "explorerResourceIsFolder",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.compareFolderContents",
+          "when": "explorerResourceIsFolder",
+          "group": "LSAF"
+        }
+      ],
+      "editor/context": [
+        {
+          "when": "editorTextFocus",
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
+          "group": "LSAF"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
+          "group": "LSAF"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiProperties",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
+          "when": "resourceExtname == '.job'",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
+          "when": "resourceExtname == '.mnf'",
+          "group": "LSAF"
+        },
+        {
+          "when": "editorTextFocus",
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
+          "group": "LSAF"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCompare",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiUpload",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiProperties",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFileUri",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiCopyRemoteFilePath",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiVersions",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiSubmitJob",
+          "when": "resourceExtname == '.job'",
+          "group": "LSAF"
+        },
+        {
+          "command": "jbodart-argenx-lsaf-restapi-upload-extension.restApiViewManifest",
+          "when": "resourceExtname == '.mnf'",
+          "group": "LSAF"
+        }
+      ]
     }
+  },
+  "scripts": {
+    "set-main-src": "node setMain.js src",
+    "set-main-dist": "node setMain.js dist",
+    "vscode:prepublish": "webpack --mode production",
+    "compile": "webpack --mode development",
+    "watch": "webpack --watch",
+    "eslint": "eslint .",
+    "publish": "npx vsce package",
+    "start": "code --extensionDevelopmentPath=.",
+    "test-read_sas": "cd ./test && node ./read_sas.test.js",
+    "update": "npx npm-check-updates -u"
+  },
+  "homepage": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/blob/master/README.md",
+  "bugs": {
+    "url": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jbodart-argenx/vscode-lsaf-restapi-upload"
+  },
+  "resolutions": {
+    "**/event-stream": "3.3.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/preset-env": "^7.26.0",
+    "@types/mocha": "^10.0.9",
+    "@types/node": "^22.9.0",
+    "@typescript-eslint/eslint-plugin": "^8.14.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.1",
+    "babel-loader": "^9.2.1",
+    "copy-webpack-plugin": "^12.0.2",
+    "eslint": "^9.18.0",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-promise": "^7.1.0",
+    "eslint-plugin-unicorn": "^56.0.0",
+    "glob": "^11.0.0",
+    "html-webpack-plugin": "^5.6.3",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.6.3",
+    "webpack": "^5.96.1",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "axios": "^1.7.7",
+    "axios-cookiejar-support": "^5.0.3",
+    "event-stream": "4.0.1",
+    "form-data": "^4.0.1",
+    "globals": "^15.14.0",
+    "isbinaryfile": "^5.0.4",
+    "js-beautify": "^1.15.1",
+    "lodash": "^4.17.21",
+    "original-fs": "^1.2.0",
+    "path": "^0.12.7",
+    "readable-stream": "^4.5.2",
+    "strip-bom-buf": "^4.0.0",
+    "tmp": "0.2.3",
+    "tough-cookie": "^5.0.0",
+    "webr": "^0.4.2",
+    "xml2js": "^0.6.2"
+  }
 }
