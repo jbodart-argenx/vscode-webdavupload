@@ -40,6 +40,13 @@
          }
       },
       {
+         "label": "set-main-src",
+         "type": "shell",
+         "command": "node",
+         "args": ["setMain.js", "src"],
+         "problemMatcher": []
+      },
+      {
          "label": "start-extension",
          "type": "shell",
          "command": "npm run start",
