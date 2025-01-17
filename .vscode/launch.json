@@ -12,12 +12,7 @@
             "outFiles": [
                 "${workspaceFolder}/src/**/*.js"
             ],
-            "sourceMaps": true,
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/",
-                "!/node_modules/**"
-            ],
-            "preLaunchTask": "start-extension"
+            "preLaunchTask": "set-main-src"
         },
         {
             "name": "Bundle & Launch Extension",
@@ -30,32 +25,13 @@
             "outFiles": [
                 "${workspaceFolder}/dist/**/*.js"  // Point to the bundled JS files
             ],
-            "preLaunchTask": "npm: compile", // "npm: build",  // Build before launching tests
+            "preLaunchTask": "npm: vscode:prepublish", // "npm: build",  // Build before launching tests
             "sourceMaps": true,  // Enable source maps for debugging
             //"trace": "verbose",   // Optional: useful for debugging if needed
             "resolveSourceMapLocations": [
                 "${workspaceFolder}/",
                 "!/node_modules/**"
-            ],
-        },
-        {
-            "name": "Launch Tests",
-            "type": "extensionHost",  // Keep this as "extensionHost"
-            "request": "launch",
-            "runtimeExecutable": "${execPath}",
-            "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}",
-                "--extensionTestsPath=${workspaceFolder}/test"  // Adjust test path if necessary
-            ],
-            "outFiles": [
-                "${workspaceFolder}/dist/**/*.js"  // Ensure this points to your test output files
-            ],
-            "preLaunchTask": "npm: compile", // "npm: build",  // Build before launching tests
-            "sourceMaps": true,
-            "resolveSourceMapLocations": [
-                "${workspaceFolder}/",
-                "!/node_modules/**"
-            ],
+            ]
         }
     ]
 }
