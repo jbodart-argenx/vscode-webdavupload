@@ -2,7 +2,7 @@ const vscode = require("vscode");
 const fs = require("fs");
 const path = require("path");
 const { initWebR, webR } = require('./read_dataset.js');
-const { uriFromString } = require('./uri.js');
+const { uriFromString, pathFromUri } = require('./uri.js');
 
 let webrRepo;
 
@@ -70,13 +70,24 @@ async function activate(context) {
                 const workspaceFolders = vscode.workspace.workspaceFolders;
                 if (workspaceFolders) {
                     workspaceFolders.forEach((folder, index) => {
-                        // Check if the folder exists - if not, remove it from the workspace
-                        if (!fs.existsSync(folder.uri.fsPath)) {
-                            console.warn('Removing non-existing workspace folder, index:', index, ', path:', folder.uri.fsPath);
-                            vscode.workspace.updateWorkspaceFolders(index, 1);
-                        } else {
-                            console.log('Keeping existing workspace folder, index:', index, ', path:', folder.uri.fsPath);
-                        }
+                        // Check if the folder Uri exists using vscode.workspace.fs methods - if not, remove it from the workspace
+                        vscode.workspace.fs.stat(folder.uri).then(
+                            (stats) => {
+                                // console.log('Folder exists:', folder.uri.fsPath);
+                                if (stats) console.log('Keeping existing workspace folder, index:', index, ', path:', pathFromUri(folder.uri), 'stats:', stats);
+                            },
+                            (error) => {
+                                // console.warn('Folder does not exist:', folder.uri.fsPath);
+                                if (error) {
+                                    console.warn(
+                                        'Removing non-existing workspace folder, index:', index,
+                                        ', path:', pathFromUri(folder.uri),
+                                        ', message:', error.message
+                                    );
+                                    vscode.workspace.updateWorkspaceFolders(index, 1);
+                                }
+                            }
+                        );
                     });
                 }
             }
@@ -84,7 +95,7 @@ async function activate(context) {
 
         // event.removed.forEach(folder => {
         //     // Optionally handle removed folders
-        //     console.log(`Folder removed: ${folder.uri.fsPath}`);
+        //     console.log(`Folder removed: ${pathFromUri(folder.uri)}`);
         // });
     });
 
