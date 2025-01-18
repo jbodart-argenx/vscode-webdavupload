@@ -3,7 +3,6 @@ const vscode = require("vscode");
 // This is the async function that opens a webview and collects multi-line input from the user
 // Even though the function does not use await, marking a function as async ensures it returns a promise.
 // This can be useful if the function needs to be used in a context where a promise is expected.
-// eslint-disable-next-line require-await
 async function getMultiLineText(defaultValue = '') {
    return new Promise((resolve, reject) => {
       // Create and show a new webview panel
@@ -42,7 +41,6 @@ async function getMultiLineText(defaultValue = '') {
 // This is the async function that opens a webview and collects multi-line input from the user
 // Even though the function does not use await, marking a function as async ensures it returns a promise.
 // This can be useful if the function needs to be used in a context where a promise is expected.
-// eslint-disable-next-line require-await
 async function showMultiLineText(textValue = '', title="Text Content", header="", buttonLabel="Dismiss", preserveWiteSpace = true) {
    const editable=false;
    return new Promise((resolve, reject) => {
