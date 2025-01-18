@@ -1,9 +1,8 @@
 const fs = require("fs");
 const crypto = require("crypto");
-const stripBomBuf = require('strip-bom-buf');
 
 // Function to calculate MD5 checksum of a file
-function fileMD5sum(filePath /*: string*/) /*: Promise<string>*/ {
+async function fileMD5sum(filePath /*: string*/) /*: Promise<string>*/ {
    return new Promise((resolve, reject) => {
       const hash = crypto.createHash('md5');
       const fileStream = fs.createReadStream(filePath);
@@ -29,11 +28,13 @@ function fileMD5sum(filePath /*: string*/) /*: Promise<string>*/ {
 
 // Function to convert Windows line endings to Unix line endings, strip BOM, and compute MD5 checksum
 function fileMD5sumStripBom(inputFile) {
-   fs.readFile(inputFile, (err, data) => {
+   fs.readFile(inputFile, async (err, data) => {
       if (err) {
          console.error('Error reading the file:', err);
          return;
       }
+      // Use dynamic import
+      const stripBomBuf = await import('strip-bom-buf').then(module => module.default);
 
       // Remove BOM if present
       data = stripBomBuf(data);
