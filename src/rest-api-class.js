@@ -14,7 +14,7 @@ const { streamToPromise } = require('./stream.js');
 const { pipeline } = require('stream/promises'); // Node.js v15+ only
 // const { showMultiLineText } = require('./multiLineText.js');
 const { showTableView } = require('./json-table-view.js');
-const { read_dataset, read_sas, read_xpt, read_rds } = require('./read_dataset.js');
+const { read_dataset } = require('./read_dataset.js');
 const xml2js = require('xml2js');
 const { getObjectView } = require("./object-view.js");
 console.log('(rest-api-class.js) typeof getObjectView:', typeof getObjectView);
@@ -79,8 +79,8 @@ class RestApi {
       }
 
       // const workingDir = path.posix.dirname(vscode.Uri.joinPath(this.localFile, '..').path);
-      const workingDir = (this.localFileStat?.type == vscode.FileType.Directory) ? this.localFile : vscode.Uri.joinPath(this.localFile, '..');
-      while((await this.getFileStat(workingDir))?.type != vscode.FileType.Directory) {
+      let workingDir = (this.localFileStat?.type === vscode.FileType.Directory) ? this.localFile : vscode.Uri.joinPath(this.localFile, '..');
+      while((await this.getFileStat(workingDir))?.type !== vscode.FileType.Directory) {
          workingDir = vscode.Uri.joinPath(workingDir, '..'); // get parent uri --- in case specified path does not exist yet / anymore
       }
 
@@ -138,7 +138,7 @@ class RestApi {
          } 
          catch(error) {
             debugger;
-            console.log(`(getEndPointConfig) Error fetching remoteFileStat: ${error}`);
+            console.log(`(getEndPointConfig) Error fetching remoteFile ${this.remoteFileUri.toString()} Stat: ${error}`);
             this.remoteFileStat = null;
          }
       } else {
@@ -223,6 +223,10 @@ class RestApi {
          } catch (err) {
             debugger;
             console.log(`(logon) Error: ${err}`);
+            if (err.code === "ECONNRESET") {
+               console.log(`(logon) ECONNRESET: ${err}`);
+               return this.logon();
+            }
             deleteAuthTokens(this.host);
             return this.logon();
          }
@@ -393,6 +397,7 @@ class RestApi {
             contentLength = response.headers['content-length'];
          }
          transferEncoding = response.headers['transfer-encoding'];
+         // eslint-disable-next-line eqeqeq
          if (response.status != 200) {
             if (contentType.match(/\bjson\b/)) {
                data = response.data;
@@ -644,6 +649,7 @@ class RestApi {
                responseType = 'arraybuffer';
             }
          }
+// eslint-disable-next-line eqeqeq
          if (response.status != 200) {
             if (contentType.match(/\bjson\b/)) {
                data = response.data;
@@ -816,7 +822,6 @@ class RestApi {
 
 
    async getLocalFolderContents(param) {
-      let folderPath;
       let folderUri;
       if (typeof param === 'string') {
          folderUri = uriFromString(param);
@@ -838,34 +843,33 @@ class RestApi {
       // let itemType;
       if (fileStat.type === vscode.FileType.File) {
          return vscode.window.showWarningMessage(`Get Local Folder Contents: ${this.localFile} is not a folder!`);
-      } else if (fileStat.type === vscode.FileType.Directory) {
-         folderPath = this.localFile;
-      } else {
+      } else if (fileStat.type !== vscode.FileType.Directory) {
          return vscode.window.showWarningMessage(`Get Local Folder Contents: ${this.localFile} is neither a file nor a folder!`);
       }
 
       let folderContents, folderContentsText;
       try {
-         // const files = await fs.promises.readdir(folderPath); // Asynchronous read of directory contents
-         // const files = await vscode.workspace.fs.readDirectory(folderPath);
          const files = await vscode.workspace.fs.readDirectory(folderUri);
 
          folderContents = await Promise.all(
             files.map(async ([name, type]) => {
-               // const filePath = vscode.Uri.joinPath(folderPath, name);
                const fileUri = vscode.Uri.joinPath(folderUri, name);
                const stats = await vscode.workspace.fs.stat(fileUri); // Asynchronous stat call
                let isBinary = null;
                let md5sum = '';
                let fileType = '';
 
-               if (type === vscode.FileType.File && fileUri.scheme === "file") {
+               if (type === vscode.FileType.File) {
                   fileType = 'file';
+                  if (fileUri.scheme === "file"){
                   isBinary = isBinaryFile(fileUri.fsPath);
                   if (isBinary) {
                      md5sum = await fileMD5sum(fileUri.fsPath);
                   } else {
                      md5sum = fileMD5sumStripBom(fileUri.fsPath);
+                     }
+                  } else {
+                     md5sum = '';
                   }
                } else {
                   if (type === vscode.FileType.Directory) {
@@ -917,7 +921,9 @@ class RestApi {
          vscode.window.showErrorMessage('(getRemoteFolderContents) unexpected parameter:', param);
          return;
       }
-      this.localFile = folderUri;  // e.g. URI(file:///c%3A/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents)
+      this.localFile = folderUri;  
+      // e.g. URI(file:///c%3A/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents)
+      // e.g. URI(lsaf-repo://xartest/clinical/test/indic/cdisc-pilot-0001/biostat/staging/generic_adam)
       if (!this.localFile) {
          console.error('Cannot get Remote Folder Contents of a non-specified path:', this.localFile);
          vscode.window.showErrorMessage('Cannot get Remote Folder Contents of a non-specified path:', this.localFile);
@@ -1219,7 +1225,6 @@ class RestApi {
       }
    }
 
-   // eslint-disable-next-line require-await
    async parseXmlString(xmlString) {
       const parser = new xml2js.Parser();
       // Use Promise to handle async parsing
@@ -1573,7 +1578,6 @@ class RestApi {
       }
    }
 
-   // eslint-disable-next-line require-await
    async getEditorContents() {
       // Get the active text editor
       const editor = vscode.window.activeTextEditor;
@@ -1636,7 +1640,7 @@ class RestApi {
       filePath = filePath || this.localFile || this.remoteFile;
       if (filePath === this.remoteFile) {
          debugger;
-         console.log('Valid case? filePath = this.remoteFile =', filePath);
+         console.log('(getFormData) Valid case? filePath = this.remoteFile =', filePath);
       }
       if (filePath && typeof filePath === 'string') {
          filePath = uriFromString(filePath);
@@ -1874,22 +1878,21 @@ class RestApi {
       } else if (param === undefined) {
          useEditorContents = true;
       }
-      console.log('useEditorContents:', useEditorContents);
       if (useEditorContents) {
          await this.getEditorContents();
          if (!this.fileContents == null) {
-            console.log(`Null or Undefined Editor Contents, aborting upload.`);
+            console.log(`(RestApi.uploadFile) Null or Undefined Editor Contents, aborting upload.`);
             vscode.window.showWarningMessage(`Null or Undefined Editor Contents, aborting upload.`);
             return;
          }
       } else {
          if (!this.localFile) {
-            console.log(`No local File specified, aborting upload.`);
+            console.log(`(RestApi.uploadFile) No local File specified, aborting upload.`);
             vscode.window.showWarningMessage(`No local File specified, aborting upload.`);
             return;
          }
          if (!this.getFileStat(this.localFile)) {
-            console.log(`Local File "${this.localFile}" not found, aborting upload.`);
+            console.log(`(RestApi.uploadFile) Local File "${this.localFile}" not found, aborting upload.`);
             vscode.window.showWarningMessage(`Local File "${this.localFile}" not found, aborting upload.`);
             return;
          }
@@ -1901,19 +1904,20 @@ class RestApi {
          .replace(/\/lsaf\/webdav\/repo\//, '/repository/files/')
          .replace(/\/$/, '')
          ;
-      console.log('urlPath:', urlPath)
+      console.log('(RestApi.uploadFile) urlPath:', urlPath)
       const filePath = this.remoteFile;
-      console.log('filePath:', filePath);
+      console.log('(RestApi.uploadFile) source filePath:', filePath);
       let apiRequest = `${path.posix.join(urlPath, filePath)}?action=upload&version=MINOR&createParents=true&overwrite=true`;
       await this.enterMultiLineComment(`Add / Update ${((this.localFile.path || this.localFile).toString().split(/[\\/]/) || '...').slice(-1)}\n\n`);
       if (this.comment) {
          apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
       }
       apiRequest = `${apiRequest}&expand=item,status`;
-      console.log('useEditorContents:', useEditorContents);
+      console.log('(RestApi.uploadFile) useEditorContents:', useEditorContents);
       let formdata;
       let filename;
       let requestOptions;
+      let fullUrl;
       [formdata, filename] = await this.getFormData(useEditorContents, param);
       requestOptions = {
          headers: {
@@ -1925,34 +1929,33 @@ class RestApi {
       // console.log(JSON.stringify(requestOptions));
       let response;
       try {
-         const fullUrl = apiUrl + apiRequest
-         console.log('fullUrl:', fullUrl);
+         fullUrl = apiUrl + apiRequest
+         console.log('(RestApi.uploadFile) fullUrl:', fullUrl);
          const controller = new AbortController();
          const timeout = 10_000;
          const timeoutId = setTimeout(() => controller.abort(), timeout);
          try {
-            // const fullUrl = encodeURI(apiUrl + apiRequest);
-            const fullUrl = apiUrl + apiRequest;
             response = await axios.put(fullUrl, formdata, { ...requestOptions, signal: controller.signal });
             clearTimeout(timeoutId); // clear timeout when the request completes
          } catch (error) {
             if (error.code === 'ECONNABORTED') {
-               console.error(`Fetch request timed out after ${timeout/1000} seconds.`);
-               throw new Error(`Fetch request timed out after ${timeout/1000} seconds.`);
+               console.error(`(RestApi.uploadFile) Fetch request timed out after ${timeout/1000} seconds.`);
+               throw new Error(`(RestApi.uploadFile) Fetch request timed out after ${timeout/1000} seconds.`);
             } else {
-               console.error('Fetch request failed:', error);
-               throw new Error('Fetch request failed:', error.message);
+               debugger;
+               console.error('(RestApi.uploadFile) Fetch request failed:', error);
+               throw new Error('(RestApi.uploadFile) Fetch request failed:', error.message);
             }
          }
-         console.log('response.status:', response.status, response.statusText);
+         console.log('(RestApi.uploadFile) response.status:', response.status, response.statusText);
          // Check if there's a redirect (3xx status code)
          const maxRedirects = 20;
          let redirects = 1;
          while (response.status >= 300 && response.status < 400 && redirects < maxRedirects) {
             const redirectUrl = response.headers['location'];
             if (redirectUrl) {
-               console.log(`Response status: ${response.status} ${response.statusText}, Redirecting (${redirects}) to: ${redirectUrl}`);
-               vscode.window.showInformationMessage(`Redirecting (${redirects}) to: ${redirectUrl}`);
+               console.log(`(RestApi.uploadFile) Response status: ${response.status} ${response.statusText}, Redirecting (${redirects}) to: ${redirectUrl}`);
+               vscode.window.showInformationMessage(`(RestApi.uploadFile) Redirecting (${redirects}) to: ${redirectUrl}`);
                // re-create the formdata and file stream (they can only be used once!)
                [formdata, filename] = await this.getFormData(useEditorContents, param);
                requestOptions = {
@@ -1966,7 +1969,8 @@ class RestApi {
                try {
                   response = await axios.put(redirectUrl, formdata, requestOptions);
                } catch (error) {
-                  console.log('error:', error);
+                  debugger;
+                  console.log('(RestApi.uploadFile) error:', error);
                   throw error;
                }
             }
@@ -1974,19 +1978,19 @@ class RestApi {
          }
          if (!response.status === 200) {
             if (redirects >= maxRedirects) {
-               vscode.window.showErrorMessage(`HTTP error uploading file, too many redirects! Status: ${response.status}  ${response.statusText}`);
+               vscode.window.showErrorMessage(`(RestApi.uploadFile) HTTP error uploading file, too many redirects! Status: ${response.status}  ${response.statusText}`);
                throw new Error(`HTTP error uploading file, too many redirects! Status: ${response.status}  ${response.statusText}`);
             }
             const responseText = response.data;
             console.log("responseText:", responseText);
-            vscode.window.showErrorMessage(`HTTP error uploading file! Status: ${response.status}  ${response.statusText}`);
+            vscode.window.showErrorMessage(`(RestApi.uploadFile) HTTP error uploading file! Status: ${response.status}  ${response.statusText}`);
             throw new Error(`HTTP error uploading file! Status: ${response.status}  ${response.statusText}`);
          }
          let result;
          let status;
          let message;
          const contentType = response.headers['content-type'];
-         console.log('contentType:', contentType);
+         console.log('(RestApi.uploadFile) contentType:', contentType);
          if (response.headers['content-type'].match(/\bjson\b/)) {
             const data = response.data;
             status = data.status;
@@ -1997,11 +2001,11 @@ class RestApi {
          } else {
             result = response.data;
          }
-         console.log('(uploadFile) result:', result);
+         console.log('(RestApi.uploadFile) result:', result);
          if (status?.type === 'FAILURE') {
-            message = `File "${filename}" upload failed: ` + status?.message || result;
+            message = `File "${filename}" upload to "${path.posix.join(urlPath, filePath)}" on ${new URL(fullUrl).hostname} failed: ` + status?.message || result;
          } else if (status?.type === 'SUCCESS') {
-            message = `File "${filename}" uploaded: ` + status?.message || result;
+            message = `File "${filename}" uploaded to : ${new URL(fullUrl).hostname.split('.')[0]} ${urlPath.split('/')[1]}, ` + status?.message || result;
          } else {
             console.log('result:', result);
             message = `File "${filename}" upload result: ${result}`;
@@ -2009,8 +2013,8 @@ class RestApi {
          console.log(message);
          vscode.window.showInformationMessage(message);
       } catch (error) {
-         vscode.window.showErrorMessage(`Error uploading file "${filename}":`, error);
-         console.error(`Error uploading file "${filename}":`, error);
+         vscode.window.showErrorMessage(`(RestApi.uploadFile) Error uploading file "${filename}" to "${apiUrl + path.posix.join(urlPath, filePath)}":`, error);
+         console.error(`Error uploading file "${filename}" to "${apiUrl + path.posix.join(urlPath, filePath)}":`, error);
          this.fileContents = null;
       }
    }
