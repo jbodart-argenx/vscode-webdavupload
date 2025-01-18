@@ -1,4 +1,5 @@
 const vscode = require('vscode');
+const path = require('path');
 
 async function getKnownSchemes() {
    const knownSchemes = ['http', 'https', 'ftp', 'file', 'untitled', 'vscode', 'vscode-remote', 'vscode-userdata', 'data'];
@@ -29,16 +30,20 @@ async function isValidUri(uriString) {
       // Use url.protocol.slice(0, -1) to remove the trailing colon of URL the protocol component
       return knownSchemes.includes(url.protocol.slice(0, -1)) && isValidSchemeFormat(url.protocol.slice(0, -1));
    } catch (e) {
-      return false;
+      if (e) return false;
    }
 }
 
 function isRelativeUri(uriString) {
    try {
       const uri = new URL(uriString, 'http://example.com');
-      return !uriString.includes(':');
+      let isRelative = false;
+      if (uri) {
+         isRelative = !uri.protocol;  // Check if the URI has a scheme component
+      }
+      return isRelative;
    } catch (e) {
-      return false;
+      if (e) return false;
    }
 }
 
@@ -51,7 +56,7 @@ function resolveUri(relativeUri, baseUri) {
       const resolved = new URL(relativeUri, base);
       return resolved.toString();
    } catch (e) {
-      return null;
+      if (e) return null;
    }
 }
 
@@ -65,7 +70,7 @@ function uriFromString(param) {
          // if param matches a URI path, use vscode.Uri.parse
          // otherwise, use vscode.Uri.file
          if (param.match(/^[a-zA-Z]:/) && process.platform === 'win32') {
-            param = vscode.Uri.file(param);
+            param = vscode.Uri.file(param.replace(/^[A-Z]:/, s => s.toLowerCase()));  // Convert windows drive letter to lowercase
          } else
          if (param.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:/)) {
             param = vscode.Uri.parse(param.replace(/\\/g, '/'));
@@ -75,6 +80,7 @@ function uriFromString(param) {
          return param;
       } catch (e) {
          // ignore
+         if (e) return null;
       }
    }
    return null;
@@ -86,12 +92,16 @@ function pathFromUri(uri, dropScheme = false) {
    }
    if (uri instanceof vscode.Uri) {
       if (uri.scheme === 'file') {
-         return uri.fsPath;
+         let path = uri.fsPath;
+         path = path.replace(/^[A-Z]:/, s => s.toLowerCase());  // Convert windows drive letter to lowercase
+         return path;
       } else {
          if (dropScheme) {
             return uri.path;
+            // return decodeURIComponent(uri.path);
          } else {
             return uri.toString();
+            // return decodeURIComponent(uri.toString());
          }
       }
    }
