@@ -3,7 +3,6 @@ const vscode = require("vscode");
 const { getAuthToken } = require('./auth.js');
 const { axios } = require("./axios-cookie-jar.js");
 
-// eslint-disable-next-line require-await
 async function showTableView(tableViewTitle, data, context, webViewTitle = "Table View", retainContextWhenHidden = true) {
 
    const panel = vscode.window.createWebviewPanel(
@@ -98,22 +97,22 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
    columns = [...jsonData].reduce((acc, row) => [...(new Set([...acc, ...Object.keys(row)]))], []);
    console.log('columns:', columns);
 
-   const escapeHTML = (str) => `${str || ''}`.replace(/[&<>"']/g, (match) => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-   }[match]));
+   // const escapeHTML = (str) => `${str || ''}`.replace(/[&<>"']/g, (match) => ({
+   //    '&': '&amp;',
+   //    '<': '&lt;',
+   //    '>': '&gt;',
+   //    '"': '&quot;',
+   //    "'": '&#39;'
+   // }[match]));
    
    // Generate table headers
-   const tableHeaders = columns.map(column => `<th>${escapeHTML(column)}</th>`).join('');
+   // const tableHeaders = columns.map(column => `<th>${escapeHTML(column)}</th>`).join('');
 
    // Generate table rows with index - set values of cells that do not exist in a row to '' (instead of the default 'undefined')
-   const tableRows = jsonData.map((item, index) => {
-      const row = columns.map(column => `<td>${escapeHTML(item[column] || '')}</td>`).join('');
-      return `<tr><th>${index + 1}</th>${row}</tr>`;
-   }).join('');
+   // const tableRows = jsonData.map((item, index) => {
+   //    const row = columns.map(column => `<td>${escapeHTML(item[column] || '')}</td>`).join('');
+   //    return `<tr><th>${index + 1}</th>${row}</tr>`;
+   // }).join('');
 
    function getNonce() {
       let text = '';
@@ -128,107 +127,107 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
    // console.log('nonce:', nonce);
    // vscode.window.showInformationMessage(`nonce: ${nonce}`);
 
-   const shadowRootInnerHtml = `
-      <style nonce="${nonce}">
-         /* CSS Reset */
-         html, body, div, span, applet, object, iframe,
-         h1, h2, h3, h4, h5, h6, p, blockquote, pre,
-         a, abbr, acronym, address, big, cite, code,
-         del, dfn, em, img, ins, kbd, q, s, samp,
-         small, strike, strong, sub, sup, tt, var,
-         b, u, i, center,
-         dl, dt, dd, ol, ul, li,
-         fieldset, form, label, legend,
-         table, caption, tbody, tfoot, thead, tr, th, td,
-         article, aside, canvas, details, embed,
-         figure, figcaption, footer, header, hgroup,
-         menu, nav, output, ruby, section, summary,
-         time, mark, audio, video {
-            margin: 0;
-            padding: 0;
-            border: 0;
-            font-size: 100%;
-            font: inherit;
-            vertical-align: baseline;
-         }
-         article, aside, details, figcaption, figure,
-         footer, header, hgroup, menu, nav, section {
-            display: block;
-         }
-         body {
-            line-height: 1;
-         }
-         ol, ul {
-            list-style: none;
-         }
-         blockquote, q {
-            quotes: none;
-         }
-         blockquote:before, blockquote:after,
-         q:before, q:after {
-            content: '';
-            content: none;
-         }
-         table {
-            border-collapse: collapse;
-            border-spacing: 0;
-         }
+   // const shadowRootInnerHtml = `
+   //    <style nonce="${nonce}">
+   //       /* CSS Reset */
+   //       html, body, div, span, applet, object, iframe,
+   //       h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+   //       a, abbr, acronym, address, big, cite, code,
+   //       del, dfn, em, img, ins, kbd, q, s, samp,
+   //       small, strike, strong, sub, sup, tt, var,
+   //       b, u, i, center,
+   //       dl, dt, dd, ol, ul, li,
+   //       fieldset, form, label, legend,
+   //       table, caption, tbody, tfoot, thead, tr, th, td,
+   //       article, aside, canvas, details, embed,
+   //       figure, figcaption, footer, header, hgroup,
+   //       menu, nav, output, ruby, section, summary,
+   //       time, mark, audio, video {
+   //          margin: 0;
+   //          padding: 0;
+   //          border: 0;
+   //          font-size: 100%;
+   //          font: inherit;
+   //          vertical-align: baseline;
+   //       }
+   //       article, aside, details, figcaption, figure,
+   //       footer, header, hgroup, menu, nav, section {
+   //          display: block;
+   //       }
+   //       body {
+   //          line-height: 1;
+   //       }
+   //       ol, ul {
+   //          list-style: none;
+   //       }
+   //       blockquote, q {
+   //          quotes: none;
+   //       }
+   //       blockquote:before, blockquote:after,
+   //       q:before, q:after {
+   //          content: '';
+   //          content: none;
+   //       }
+   //       table {
+   //          border-collapse: collapse;
+   //          border-spacing: 0;
+   //       }
 
-         /* Custom Styles */
-         :host {
-               display: flex;
-               flex-direction: column;
-               width: 100%;
-               height: 100%;
-            }
-            #header {
-               flex: 0 0 auto;
-            }
-            #container {
-               flex: 1 1 auto;
-               overflow: auto;
-               position: relative;
-            }
-            table {
-               width: 100%;
-               border-collapse: collapse;
-            }
-            table th, table td {
-               border: 1px solid #ddd !important;
-               padding: 8px !important;
-               text-align: left !important;
-            }
-            table th {
-               background-color: #f2f2f2 !important;
-               position: sticky;
-               top: 0; /* Fix column headers */
-               z-index: 2; /* Ensure column headers are above other content */
-            }
-            table td:first-child {
-               position: sticky;
-               left: 0; /* Fix row headers */
-               background-color: #f9f9f9 !important; /* Optional: Different background for row headers */
-               z-index: 1; /* Ensure row headers are above other content but below column headers */
-            }
-      </style>
-      <div id="header">
-         <h1>${tableTitle}</h1>
-         <button id="requestData">Request Data</button>
-      </div>
-      <div id="container">
-         <table id="dataTable">
-            <thead>
-               <tr>
-                     <th>#</th>
-                     ${tableHeaders}
-               </tr>
-            </thead>
-            <tbody>
-               ${tableRows}
-            </tbody>
-         </table>
-      </div>
-   `;
+   //       /* Custom Styles */
+   //       :host {
+   //             display: flex;
+   //             flex-direction: column;
+   //             width: 100%;
+   //             height: 100%;
+   //          }
+   //          #header {
+   //             flex: 0 0 auto;
+   //          }
+   //          #container {
+   //             flex: 1 1 auto;
+   //             overflow: auto;
+   //             position: relative;
+   //          }
+   //          table {
+   //             width: 100%;
+   //             border-collapse: collapse;
+   //          }
+   //          table th, table td {
+   //             border: 1px solid #ddd !important;
+   //             padding: 8px !important;
+   //             text-align: left !important;
+   //          }
+   //          table th {
+   //             background-color: #f2f2f2 !important;
+   //             position: sticky;
+   //             top: 0; /* Fix column headers */
+   //             z-index: 2; /* Ensure column headers are above other content */
+   //          }
+   //          table td:first-child {
+   //             position: sticky;
+   //             left: 0; /* Fix row headers */
+   //             background-color: #f9f9f9 !important; /* Optional: Different background for row headers */
+   //             z-index: 1; /* Ensure row headers are above other content but below column headers */
+   //          }
+   //    </style>
+   //    <div id="header">
+   //       <h1>${tableTitle}</h1>
+   //       <button id="requestData">Request Data</button>
+   //    </div>
+   //    <div id="container">
+   //       <table id="dataTable">
+   //          <thead>
+   //             <tr>
+   //                   <th>#</th>
+   //                   ${tableHeaders}
+   //             </tr>
+   //          </thead>
+   //          <tbody>
+   //             ${tableRows}
+   //          </tbody>
+   //       </table>
+   //    </div>
+   // `;
 
 
    // Return the complete HTML content
@@ -239,7 +238,7 @@ function getJsonTableWebviewContent(tableTitle, jsonData) {
          <meta charset="UTF-8">
          <meta name="viewport" content="width=device-width, initial-scale=1.0">
          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'nonce-${nonce}'; script-src 'self' 'nonce-${nonce}';">
-         <title>JSON Table</title>
+         <title>${tableTitle}</title>
          <style nonce="${nonce}">
             /* Styles for the shadow host */
             #shadow-host {
