@@ -10,12 +10,14 @@ const { openFile } = require('./openFile');
 const beautify = require("js-beautify");
 const { showMultiLineText } = require('./multiLineText.js');
 const { showTableView } = require('./json-table-view.js');
-const { read_dataset, read_sas, read_xpt, read_rds } = require('./read_dataset.js');
+const { read_sas, read_xpt, read_rds } = require('./read_dataset.js');
+const { uriFromString, pathFromUri } = require('./uri.js');
+const _ = require('lodash');
 
 async function restApiFolderContents(param, _arg2, config = null) {
    const restApi = new RestApi();
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      param = uriFromString(param);
    }
    try {
       if (config && config.localRootPath && config.remoteEndpoint) {
@@ -44,10 +46,10 @@ async function restApiFolderContents(param, _arg2, config = null) {
       }
       let folderPath;
       if (typeof param === 'string') {
-         param = vscode.Uri.file(param);
+         param = uriFromString(param);
       }
       if (param instanceof vscode.Uri) {
-         folderPath = param.fsPath;
+         folderPath = pathFromUri(param) // param.fsPath;
       // } else if (typeof param === 'string') {
       //    folderPath = param;
       } else {
@@ -56,15 +58,19 @@ async function restApiFolderContents(param, _arg2, config = null) {
       console.log('(restApiFolderContents) Local Folder Path:', folderPath);
       console.log('(restApiFolderContents) restApi.filePath:', restApi.filePath);
       console.log('(restApiFolderContents) restApi.remoteFile:', restApi.remoteFile);
-      const remoteFolderPath = new URL(restApi.config.remoteEndpoint.url).pathname
+      
+      const remoteFolderPath = path.join(new URL(restApi.config.remoteEndpoint.url).pathname
          .replace(/\/lsaf\/webdav\/(work|repo)\//, '/')
-         .replace(/\/$/, '') + restApi.remoteFile;
+         .replace(/\/$/, ''),
+         restApi.remoteFile
+      );
       console.log("(restApiFolderContents) remoteFolderPath:\n", remoteFolderPath);
       console.log("(restApiFolderContents) Folder contents:\n", folderContentsText);
 
       // vscode.window.showInformationMessage(folderContents);
       const isLocal = false;
       if (Array.isArray(folderContents.items)) {
+         debugger ;;; //  $$$$$ CHECK HERE 
          showFolderView(
             remoteFolderPath,
             folderContents.items.map(file => {
@@ -93,13 +99,14 @@ console.log('typeof restApiFolderContents:', typeof restApiFolderContents);
 
 async function localFolderContents(param, context) {
    let folderPath;
+   let folderUri;
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      folderUri = uriFromString(param);
+      folderPath = param;
    }
    if (param instanceof vscode.Uri) {
-      folderPath = param.fsPath;
-   // } else if (typeof param === 'string') {
-   //    folderPath = param;
+      folderUri = param;
+      folderPath = pathFromUri(param);
    } else {
       folderPath = null;
       console.log('Cannot get local folder contents of ${param}')
@@ -109,7 +116,7 @@ async function localFolderContents(param, context) {
    const restApi = new RestApi();
 
    try {
-      await restApi.getLocalFolderContents(param);
+      await restApi.getLocalFolderContents(folderUri);
       let folderContents = restApi.localFolderContents;
       let folderContentsText;
       if (typeof folderContents === 'object') {
@@ -127,19 +134,37 @@ async function localFolderContents(param, context) {
       // vscode.window.showInformationMessage(folderContents);
       if (Array.isArray(folderContents)) {
          const updatedFolderContents = await Promise.all(folderContents.map(async file => {
-            const filePath = path.join(folderPath, file.name);
+            let filePath;
+            // filePath = path.join(folderPath, file.name); // could be wrong, e.g. "lsaf-repo:\\xartest\\general\\biostat\\macros\\testing\\dat\\airlines.rds"
+                                                            //                 for folderPath = "lsaf-repo://xartest/general/biostat/macros/testing/dat"
+            const fileUri = vscode.Uri.joinPath(folderUri, file.name);
+            filePath = pathFromUri(fileUri);  // correct, e.g.: lsaf-repo://xartest/general/biostat/macros/testing/dat/airlines.rds
             console.log('filePath:', filePath);
-            const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath));  // rejected promise not handled within 1 second: Error: Path provided was not a file!
+            console.log('fileUri:', fileUri);
+            let fileStat;
+            // try{
+            //    fileStat = await vscode.workspace.fs.stat(uriFromString(filePath));
+            // } catch(e) {
+            //    console.log(`(localFolderContents) Error getting fileStat for filePath: ${filePath},`, e);
+            //    fileStat = {};
+            // }
+            try{
+               fileStat = await vscode.workspace.fs.stat(fileUri);
+            } catch(e) {
+               console.log(`(localFolderContents) Error getting fileStat for fileUri: ${fileUri},`, e);
+               fileStat = {};
+            }
             const newFile = {
                ...file,
                name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
-               path: file.path != null ? file.path : path.join(folderPath, file.name),
+               path: filePath || pathFromUri(fileUri),
                mtime: file.mtime ?? file.lastModified,
-               size: file.size ?? 0
+               size: file.size ?? 0,
+               uri: fileUri
             };
             return newFile;
          }));
-         const isLocal = true;
+         const isLocal = true; // folderUri.scheme === 'file';
          showFolderView(
             folderPath,
             updatedFolderContents,
@@ -158,29 +183,32 @@ async function localFolderContents(param, context) {
 console.log('typeof localFolderContents:', typeof localFolderContents);
 
 
-// eslint-disable-next-line require-await
 // async 
 function showFolderView(folderPath, folderContents, isLocal, config, context) {
    console.log('(showFolderView) folderPath:', folderPath);
    console.log('(showFolderView) isLocal:', isLocal)
    console.log('(showFolderView) folderPath:', folderPath);
 
+   const label = config?.label ||
+      `${uriFromString(folderPath)?.scheme}`.replace(/^file$/, '').replace(/^lsaf-/, String(uriFromString(folderPath)?.authority).split('.')[0]) ||
+      'Local';
+
    const panel = vscode.window.createWebviewPanel(
       "folderContents",  // webview identifier
       // `${isLocal ? "Local" : "Remote "+config.label} Folder Contents`,
-      `${path.basename(folderPath)}/${isLocal ? "" : " ("+config.label+")"}`, // title displayed
+      `${path.basename(folderPath)}/${isLocal ? "" : " ("+label + ")"}`, // title displayed
       vscode.ViewColumn.One,
       {
          enableScripts: true, // Allow running JavaScript in the Webview
          localResourceRoots: context ? [
-            vscode.Uri.file(path.join(context.extensionPath, 'webr-repo'))
+            uriFromString(path.join(context.extensionPath, 'webr-repo'))
          ] : [],
       }
    );
 
    // provide more details in tooltip displayed when hovering over the tooltip - does not work!
-   panel.title = `${path.basename(folderPath)}/${isLocal ? "" : " ("+config.label+")"}`;
-   panel.description = `${isLocal ? "local: " : config.label+": "}${folderPath}/`;
+   panel.title = `${path.basename(folderPath)}/${isLocal ? "" : " (" + label + ")"}`;
+   panel.description = `${isLocal ? "local: " : label + ": "}${folderPath}/`;
 
    // Set the HTML content
    panel.webview.html = getOneFolderWebviewContent(folderPath, isLocal, folderContents, config);
@@ -188,12 +216,16 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
    // Handle messages from the Webview
    panel.webview.onDidReceiveMessage(
       async (message) => {
-         // debugger ;
+         debugger ;
          console.log('(showFolderView) message:', message);
          if (typeof message.filePath === 'string') {
             message.filePath = message.filePath.replace(/[/\\]$/, '');  // remove trailing (back)slash(es)
          }
-         const fileUri = vscode.Uri.file(message.filePath);
+         debugger ;
+         let fileUri;
+         let messageFilePath;
+         // fileUri = vscode.Uri.file(message.filePath);  // file://
+         fileUri = uriFromString(message.filePath);      // lsaf-repo://
          const ext = path.extname(message.filePath).toLowerCase();
          try {
             switch (message.command) {
@@ -205,9 +237,12 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                      //    config?.localRootPath,
                      //    `|${message.filePath}`.replace(`|${remotePathPrefix}`, '').replace('|', '')
                      // );
+                     const dropScheme = true;
+                     messageFilePath = pathFromUri(message.filePath, dropScheme);
+            
                      const localPath = vscode.Uri.joinPath(config.workspaceFolder?.uri || vscode.Uri.parse(config.workspaceFolder),
                         config?.localRootPath?.path || config?.localRootPath,
-                        `|${message.filePath}`
+                        `|${messageFilePath}`
                            .replace(`|${remotePathPrefix}`, '')
                            .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
                            .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
@@ -280,7 +315,7 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                      } else if (action === 'Compare to Remote') {
                         return compareFolderContents(message.filePath, config, context);
                      } else if (action === 'Open') {
-                        const fileUri = vscode.Uri.file(message.filePath);
+                        const fileUri = uriFromString(message.filePath);
                         localFolderContents(fileUri);
                      }
                   }
@@ -294,9 +329,13 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                      //    config?.localRootPath?.path || config?.localRootPath,
                      //    `|${message.filePath}`.replace(`|${remotePathPrefix}`, '').replace('|', '')
                      // );
+                     const dropScheme = true;
+                     messageFilePath = pathFromUri(message.filePath, dropScheme);
+                     debugger ;;
+            
                      const localPath = vscode.Uri.joinPath(config.workspaceFolder?.uri || vscode.Uri.parse(config.workspaceFolder),
                         config?.localRootPath?.path || config?.localRootPath,
-                        `|${message.filePath}`
+                        `|${messageFilePath}`
                            .replace(`|${remotePathPrefix}`, '')
                            .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
                            .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
@@ -312,6 +351,7 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                         localPathExists = true;
                         console.log(`localPath exists: ${localPath}`);
                      } catch (error) {
+                        debugger ;
                         console.log(`localPath does not exist: ${localPath},`, error);
                      } 
                      const actions = ['View'];
@@ -423,20 +463,44 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                      try {
                         const restApi = new RestApi();
                         restApi.config = config;
-                        await restApi.getLocalFolderContents(folderPath);
+                        let folderUri;
+                        if (typeof folderPath === 'string') {
+                           folderUri = uriFromString(folderPath);
+                        } else if (folderPath instanceof vscode.Uri) {
+                           folderUri = folderPath;
+                        } else {
+                           folderUri = null;
+                           debugger ;
+                           console.log('Cannot get folderUri from folderPath: ${folderPath}');
+                           return;
+                        }
+                        console.log('(showFolderView) Refresh Local Folder Path:', folderPath, ', folderUri:', folderUri);
+                        await restApi.getLocalFolderContents(folderUri || folderPath);
                         let folderContents = restApi.localFolderContents;
-                        console.log('Local Folder Path:', folderPath);
                         if (Array.isArray(folderContents)) {
                            const updatedFolderContents = await Promise.all(folderContents.map(async file => {
-                              const filePath = path.join(folderPath, file.name);
+                              let filePath;
+                              // filePath = path.join(folderPath, file.name); // could be wrong, e.g. "lsaf-repo:\\xartest\\general\\biostat\\macros\\testing\\dat\\airlines.rds"
+                                                                              //                 for folderPath = "lsaf-repo://xartest/general/biostat/macros/testing/dat"
+                              const fileUri = vscode.Uri.joinPath(folderUri, file.name);
+                              filePath = pathFromUri(fileUri);  // correct, e.g.: lsaf-repo://xartest/general/biostat/macros/testing/dat/airlines.rds
                               console.log('filePath:', filePath);
-                              const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath));  
+                              console.log('fileUri:', fileUri);
+                              let fileStat;
+                              try{
+                                 // fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath)); 
+                                 fileStat = await vscode.workspace.fs.stat(fileUri);
+                              } catch(e) {
+                                 console.log(`(localFolderContents) Refresh: Error getting fileStat for fileUri: ${fileUri},`, e);
+                                 fileStat = {};
+                              } 
                               const newFile = {
                                  ...file,
                                  name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
-                                 path: file.path != null ? file.path : path.join(folderPath, file.name),
+                                 path: filePath || pathFromUri(fileUri),
                                  mtime: file.mtime ?? file.lastModified,
-                                 size: file.size ?? 0
+                                 size: file.size ?? 0,
+                                 uri: fileUri
                               };
                               return newFile;
                            }));
@@ -452,15 +516,19 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                         restApi.config = config;
                         const url = new URL(restApi.config.remoteEndpoint.url);
                         restApi.host = url.hostname;
-                        restApi.remoteFile = folderPath;
+                        debugger ;
+                        restApi.remoteFile = folderPath; // CHECK !
                         const remotePathPrefix = new URL(config.remoteEndpoint.url).pathname.replace(/\/lsaf\/webdav\/(work|repo)(?=\/)/, '').replace(/\/$/, '');
                         // let localPath = path.join(config.workspaceFolder?.uri?.fsPath || config.workspaceFolder,
                         //    config?.localRootPath,
                         //    `|${message.filePath}`.replace(`|${path.posix.normalize(remotePathPrefix)}`, '').replace('|', '')
                         //    );
+                        const dropScheme = true;
+                        messageFilePath = pathFromUri(message.filePath, dropScheme);
+                        debugger ;;
                         let localPath = vscode.Uri.joinPath(config.workspaceFolder?.uri || vscode.Uri.parse(config.workspaceFolder),
                            config?.localRootPath?.path || config?.localRootPath,
-                           `|${message.filePath}`
+                           `|${messageFilePath}`
                               .replace(`|${path.posix.normalize(remotePathPrefix)}`, '')
                               .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
                               .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
@@ -469,6 +537,7 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                         restApi.localFile = localPath;
                         restApi.getRemoteFilePath();   // remove remotePathPrefix from restApi.remoteFile
                         await restApi.getRemoteFolderContents(localPath);
+                        debugger ;;; //  $$$$$ CHECK HERE 
                         let updatedFolderContents = restApi.remoteFolderContents.items.map(file => {
                            return ({
                               ...file,
@@ -504,6 +573,9 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
 
 
 function getOneFolderWebviewContent(folderPath, isLocal, files, config) {
+   const label = config?.label ||
+      `${uriFromString(folderPath)?.scheme}`.replace(/^file$/, '').replace(/^lsaf-/, String(uriFromString(folderPath)?.authority).split('.')[0]) ||
+      'Local';
 
    return `
       <html>
@@ -554,7 +626,7 @@ function getOneFolderWebviewContent(folderPath, isLocal, files, config) {
          </style>
          </head>
          <body>
-         <h2>Contents of ${isLocal ? "local" : config.label} folder: ${folderPath}
+         <h2>Contents of ${isLocal ? "local" : label} folder: ${folderPath}
             <button class="refresh-btn" id="refreshBtn">⭮</button>
             <span style="color: grey; font-size: 50%;">${new Date()}</span>
          </h2>
@@ -607,7 +679,7 @@ function getOneFolderWebviewContent(folderPath, isLocal, files, config) {
             document.querySelectorAll('.folder-link').forEach(link => {
                link.addEventListener('click', event => {
                event.preventDefault();
-               const filePath = event.target.getAttribute('data-path');
+               const filePath = event.target.getAttribute('data-path').split('|')[0];
                vscode.postMessage({
                   command: 'openFolder',
                   filePath: filePath
@@ -688,21 +760,30 @@ function getOneFolderWebviewContent(folderPath, isLocal, files, config) {
 
 async function compareFolderContents(param, config = null, context = null) {
    let folder1Path, statusMessage;
+   // let isFolder1Local;
    if (typeof param === 'string') {
-      param = vscode.Uri.file(param);
+      // param = vscode.Uri.file(param);
+      param = uriFromString(param);
    }
    if (param instanceof vscode.Uri) {
-      folder1Path = param.fsPath;
-   // } else if (typeof param === 'string') {
-   //    folder1Path = param;
+      if (param.scheme === 'file') {
+         folder1Path = param.fsPath;
+      } else {
+         folder1Path = param.toString();
+      }
    } else {
       folder1Path = null;
-      console.log('(compareFolderContents): Cannot get local folder contents of ${param}');
+      debugger;
+      console.warn('(compareFolderContents): Cannot get local folder contents of ${param}');
       return;
    }
 
    const restApi = new RestApi();
+   // const restApi2 = isFolder1Local ? restApi : new RestApi();
+   // const restApi2 = new RestApi();
    let bothFoldersContentsText;
+
+   // debugger ;
 
    try {
       if (config && config.localRootPath != null && config.remoteEndpoint ) {
@@ -710,7 +791,12 @@ async function compareFolderContents(param, config = null, context = null) {
          if (param instanceof vscode.Uri) {
             console.log('(compareFolderContents) param:', param);
             restApi.localFile = param;
-            restApi.localFileStat = await vscode.workspace.fs.stat(param);
+            try {
+               restApi.localFileStat = await vscode.workspace.fs.stat(param);
+            } catch (error) {
+               debugger;
+               console.log(`(compareFolderContents) Error getting fileStat for localFile: ${param},`, error);
+            }
             restApi.getRemoteFilePath();   // get Remote File Path
          }
       } else {
@@ -743,64 +829,176 @@ async function compareFolderContents(param, config = null, context = null) {
          } else {
             localFolderContentsText = localFolderContents;
          }
-         console.log('Local Folder Path:', folder1Path);
+         console.log('(CompareFolderContents) Local Folder Path:', folder1Path);
          // console.log('restApi.filePath:', restApi.filePath);   // undefined
          console.log("Folder contents:\n", localFolderContentsText);
          statusMessage.dispose();
 
          progress.report({ message: "Fetching other folder contents...", increment: 50  });
          statusMessage = vscode.window.setStatusBarMessage('Fetching other folder contents...');
+
          // folder2 is remote Folder
-         let folder2Path, folder2Contents, isFolder2Local = false, folder2Config = null;
-         if (restApi.config?.remoteEndpoint?.url) {
-            folder2Config = { ...restApi.config, label: restApi.config.remoteLabel || restApi.config.label };
-         } else {
-            folder2Config = {};
+         const restApi2 = _.cloneDeep(restApi);
+         if (restApi2.config?.remoteEndpoint?.lsafUri instanceof vscode.Uri &&
+            restApi2.remoteFile &&
+            vscode.Uri.joinPath(restApi2.config.remoteEndpoint.lsafUri, restApi2.remoteFile).toString() === param.toString()
+            // i.e. both folders are the same
+         ) {
+            restApi2.config.remoteEndpoint = null;  // reset to force new endpoint selection for folder 2
          }
-         const remoteFolderPath = new URL(restApi.config.remoteEndpoint.url).pathname
-            .replace(/\/lsaf\/webdav\/(work|repo)\//, '/')
-            .replace(/\/$/, '') + restApi.remoteFile;
-         console.log("remoteFolderPath:\n", remoteFolderPath);
-         folder2Path = remoteFolderPath;
-         await restApi.getRemoteFolderContents(param);
+         let folder2Path, folder2Contents, isFolder2Local = false, folder2Config = null;
+         // debugger ;
+         if (restApi2.config?.remoteEndpoint?.url) {
+            folder2Config = { ...restApi2.config, label: restApi2.config.remoteLabel || restApi2.config.label };
+         } else {
+            const onlyRepo = false, uniquePaths = false; 
+            const chooseNewEndpoint = true;
+            await restApi2.getEndPointConfig(param, onlyRepo, uniquePaths, chooseNewEndpoint);  
+                     // based on the passed Uri (if defined)
+                     // otherwise based on the path of the local file open in the active editor
+                     // also sets remoteFile
+                                                      
+            if (!restApi2.config) {
+               return;
+            }
+         }
+         restApi2.localFile = param;  // URI(file:///c%3A/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents)
+         restApi2.localFileStat = await vscode.workspace.fs.stat(param);
+         restApi2.getRemoteFilePath();   // get Remote File Path
+         console.log(
+            '(compareFolderContents) param:', String(param),  // e.g. file:///c%3A/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents
+            ', restApi2.remoteFile:', restApi2.remoteFile     // e.g. biostat/staging/reportingevent/documents
+         );
+         let remoteFolderPath;
+         if (restApi2.config.remoteEndpoint.lsafUri && restApi2.remoteFile) {
+            try{
+               remoteFolderPath = pathFromUri(vscode.Uri.joinPath(uriFromString(restApi2.config.remoteEndpoint.lsafUri), restApi2.remoteFile));  // OK to include scheme ?
+               // e.g. 'lsaf-repo://xartest/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/dat/test_data'
+               // or   'lsaf-repo://xartest/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents'
+               
+            } catch(e) { 
+               debugger;
+               console.log(`(compareFolderContents) Error getting remoteFolderPath from lsafUri: ${restApi2.config.remoteEndpoint.lsafUri},`, e);
+            }
+            console.log("remoteFolderPath:\n", remoteFolderPath);
+            folder2Path = remoteFolderPath;
+            await restApi2.getRemoteFolderContents(uriFromString(folder2Path));
+         } else {
+            remoteFolderPath = new URL(restApi2.config.remoteEndpoint.url).pathname
+               .replace(/\/lsaf\/webdav\/(work|repo)\//, '/')
+               .replace(/\/$/, '') + restApi2.remoteFile;
+               // e.g. '/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/dat/test_data'
+               console.log("remoteFolderPath:\n", remoteFolderPath);
+               folder2Path = remoteFolderPath;
+               await restApi2.getRemoteFolderContents(uriFromString(folder2Path));
+         }
          statusMessage.dispose();
 
          
          progress.report({ message: "Comparing contents...", increment: 80  });
          statusMessage = vscode.window.setStatusBarMessage('Comparing contents...');
-         let remoteFolderContents = restApi.remoteFolderContents;
-         // folder2Config = restApi.config;
+         let remoteFolderContents = restApi2.remoteFolderContents;
+         // folder2Config = restApi2.config;
          let remoteFolderContentsText;
          if (typeof remoteFolderContents === 'object') {
             remoteFolderContentsText = beautify(JSON.stringify(remoteFolderContents), {
                indent_size: 2,
                space_in_empty_paren: true,
             });
-            if (remoteFolderContents.items) {
+            if (remoteFolderContents?.items) {
                remoteFolderContents = remoteFolderContents.items;
             }
          } else {
             remoteFolderContentsText = remoteFolderContents;
          }
-         console.log('Remote Folder Path:', folder2Path);
+         console.log('Remote Folder Path:', folder2Path);               // lsaf-repo://xartest/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents
          console.log("Remote contents:\n", remoteFolderContentsText);
+         /* e.g.
+         {
+            "schemaVersion": 1,
+            "items": [{
+               "schemaType": "folder",
+               "schemaVersion": 1,
+               "typeId": "sas:folder",
+               "id": "e63b535b-daca-477a-b53d-2a23f7670866",
+               "name": "meta",
+               "path": "/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents/meta",
+               "created": "2024-10-07T12:55:05.000Z",
+               "createdBy": "jbodart",
+               "lastModified": "2024-10-07T12:55:48.000Z",
+               "lastModifiedBy": "jbodart",
+               "propertiesLastModified": "2024-10-07T12:55:05.000Z",
+               "propertiesLastModifiedBy": "jbodart",
+               "syncable": "ALLOW",
+               "state": "ACTIVE",
+               "defaultVersionLimits": {
+                  "majorVersionLimit": null,
+                  "minorVersionLimit": null
+               }
+            }, {
+               "schemaType": "file",
+               "schemaVersion": 1,
+               "typeId": "sas:file",
+               "id": "2a2776d9-ecd3-4891-b8bd-3d1fc25e759f",
+               "name": "0001-reportingevent.xlsx",
+               "path": "/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents/0001-reportingevent.xlsx",
+               "created": "2024-10-07T12:50:33.000Z",
+               "createdBy": "argenx_general",
+               "lastModified": "2024-10-07T12:51:35.000Z",
+               "lastModifiedBy": "jbodart",
+               "propertiesLastModified": "2024-10-07T12:50:33.000Z",
+               "propertiesLastModifiedBy": "argenx_general",
+               "syncable": "ALLOW",
+               "state": "ACTIVE",
+               "versioned": false,
+               "checkedOut": false,
+               "locked": false,
+               "size": 13448,
+               "digest": "E85E3ED84E2C7CA7C0270C02B695C30C",
+               "signingStatus": "NONE"
+            }, ...]
+         }
+         */
 
 
          if (Array.isArray(localFolderContents) && Array.isArray(remoteFolderContents)) {
             folder1Contents = await Promise.all(localFolderContents.map(async file => {
-               const fPath = path.join(folder1Path, file.name);
-               console.log('folder1Path:', fPath);
-               const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(fPath));  // rejected promise not handled within 1 second: Error: Path provided was not a file!
+               let fPath;
+               if (folder1Path instanceof vscode.Uri) {
+                  fPath = vscode.Uri.joinpath(folder1Path, file.name);
+                  if (fPath.scheme === 'file') {
+                     file.path = fPath.fsPath;
+                  } else {
+                     file.path = fPath.toString();
+                  }
+               } else {
+                  file.path = path.join(folder1Path, file.name);
+                  fPath = uriFromString(file.path);
+               }
+               console.log('(compareFolderContents): folder1Path fPath:', fPath);
+               const fileStat = await vscode.workspace.fs.stat(fPath);  // rejected promise not handled within 1 second: Error: Path provided was not a file!
                const newFile = {
                   ...file,
                   name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
-                  path: file.path != null ? file.path : path.join(folder1Path, file.name),
+                  path: file.path,
                   mtime: file.mtime ?? file.lastModified,
                   size: file.size ?? 0
                };
                return newFile;
             }));
             folder2Contents = remoteFolderContents.map(file => {
+               let fPath;
+               if (folder2Path instanceof vscode.Uri) {
+                  fPath = vscode.Uri.joinpath(folder2Path, file.name);
+                  if (fPath.scheme === 'file') {
+                     file.path = fPath.fsPath;
+                  } else {
+                     file.path = fPath.toString();
+                  }
+               } else {
+                  file.path = path.join(folder2Path, file.name);
+                  fPath = uriFromString(file.path);
+               }
                return ({
                   ...file,
                   name: file.name.toString() + (file.schemaType === 'folder' ? '/' : ''),
@@ -880,7 +1078,7 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
       {
          enableScripts: true, // Allow running JavaScript in the Webview
          localResourceRoots: context ? [
-            vscode.Uri.file(path.join(context.extensionPath, 'webr-repo'))
+            uriFromString(path.join(context.extensionPath, 'webr-repo'))
          ] : [],
       }
    );
@@ -895,16 +1093,21 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
    // Handle messages from the Webview
    panel.webview.onDidReceiveMessage(
       async (message) => {
+         if (message.folder1Config?.localRootPath)        message.folder1Config.localRootPath       = new vscode.Uri(message.folder1Config.localRootPath);
+         if (message.folder1Config?.configFile)           message.folder1Config.configFile          = new vscode.Uri(message.folder1Config.configFile);
+         if (message.folder1Config?.workspaceFolder?.uri) message.folder1Config.workspaceFolder.uri = new vscode.Uri(message.folder1Config.workspaceFolder.uri);
+         if (message.folder2Config?.localRootPath)        message.folder2Config.localRootPath       = new vscode.Uri(message.folder2Config.localRootPath);
+         if (message.folder2Config?.configFile)           message.folder2Config.configFile          = new vscode.Uri(message.folder2Config.configFile);
+         if (message.folder2Config?.workspaceFolder?.uri) message.folder2Config.workspaceFolder.uri = new vscode.Uri(message.folder2Config.workspaceFolder.uri);
          let folder1Contents, folder2Contents, isBinary;
          console.log(`(showTwoFoldersView) message: ${beautify(JSON.stringify(message))}`);
-         // debugger ;
          let fileUri, ext, config, isLocal, isFolder, restApi;
          let folder1Names, folder2Names, uniqueNames, bothFoldersContents, folder1index, folder2index;
          if (message?.filePath) {
             if (typeof message.filePath === 'string') {
                message.filePath = message.filePath.replace(/[/\\]$/, '');  // remove trailing (back)slash(es)
             }
-            fileUri = vscode.Uri.file(message?.filePath);
+            fileUri = uriFromString(message?.filePath);
             ext = path.extname(message?.filePath).toLowerCase();
          }
          switch (message?.command) {
@@ -950,7 +1153,7 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
                      await restApi.getLocalFolderContents(folder1Path);
                      folder1Contents = await Promise.all(restApi.localFolderContents.map(async file => {
                         const fPath = path.join(folder1Path, file.name);
-                        const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(fPath));  // rejected promise not handled within 1 second: Error: Path provided was not a file!
+                        const fileStat = await vscode.workspace.fs.stat(uriFromString(fPath));  // rejected promise not handled within 1 second: Error: Path provided was not a file!
                         const newFile = {
                            ...file,
                            name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
@@ -977,7 +1180,7 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
                      await restApi.getLocalFolderContents(folder2Path);
                      folder2Contents = await Promise.all(restApi.localFolderContents.map(async file => {
                         const fPath = path.join(folder2Path, file.name);
-                        const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(fPath));  // rejected promise not handled within 1 second: Error: Path provided was not a file!
+                        const fileStat = await vscode.workspace.fs.stat(uriFromString(fPath));  // rejected promise not handled within 1 second: Error: Path provided was not a file!
                         const newFile = {
                            ...file,
                            name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
@@ -988,22 +1191,36 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
                         return newFile;
                      }));
                   } else  {
-                     restApi.remoteFile = folder2Path;
+                     restApi.remoteFile = folder2Path;  // CHECK !  'lsaf-repo://xartest/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents'
                      restApi.config = folder2Config;
-                     restApi.host = new URL(restApi.config.remoteEndpoint.url).host;
+                     restApi.host = new URL(restApi.config.remoteEndpoint.url).host;  // e.g. 'xartest.ondemand.sas.com'
                      const remotePathPrefix = new URL(restApi.config.remoteEndpoint.url).pathname.replace(/\/lsaf\/webdav\/(work|repo)(?=\/)/, '').replace(/\/$/, '');
+                     // e.g. '/clinical/test/indic/cdisc-pilot-0001'
+
                      // let localPath = path.join(restApi.config.workspaceFolder?.uri?.fsPath || restApi.config.workspaceFolder,
                      //       restApi.config?.localRootPath,
                      //    `|${folder2Path}`.replace(`|${path.posix.normalize(remotePathPrefix)}`, '').replace('|', '')
                      //    );
-                     let localPath = vscode.Uri.joinPath(restApi.config.workspaceFolder?.uri || vscode.Uri.parse(restApi.config.workspaceFolder),
-                     restApi.config?.localRootPath?.path || restApi.config?.localRootPath,
-                        `|${folder2Path}`
+                     // let localPath = vscode.Uri.joinPath(restApi.config.workspaceFolder?.uri || vscode.Uri.parse(restApi.config.workspaceFolder),
+                     // restApi.config?.localRootPath?.path || restApi.config?.localRootPath,
+                     //    `|${folder2Path}`
+                     //       .replace(`|${path.posix.normalize(remotePathPrefix)}`, '')
+                     //       .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
+                     //       .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
+                     //       .replace('|', '')
+                     //    );
+                     // WRONG: URI(file:///c%3A/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/lsaf-repo%3A/xartest/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents)
+                     const dropScheme = true;
+                     let localPath = vscode.Uri.joinPath(
+                        restApi.config.workspaceFolder?.uri || uriFromString(restApi.config.workspaceFolder),
+                        restApi.config?.localRootPath?.path || restApi.config?.localRootPath,
+                        `|${pathFromUri(uriFromString(folder2Path), dropScheme)}`
                            .replace(`|${path.posix.normalize(remotePathPrefix)}`, '')
                            .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
                            .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
                            .replace('|', '')
                         );
+                     console.log(`(showTwoFoldersView) folder2Path: ${folder2Path} -> localPath: ${localPath}`);
                      restApi.localFile = localPath;
                      restApi.getRemoteFilePath();    // remove remotePathPrefix from restApi.remoteFile  
                      await restApi.getRemoteFolderContents(localPath);
@@ -1072,7 +1289,7 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
                   } else if (action === 'Compare to Remote') {
                      return compareFolderContents(message.filePath, config, context);
                   } else if (action === 'Open') {
-                     const fileUri = vscode.Uri.file(message.filePath);
+                     const fileUri = uriFromString(message.filePath);
                      localFolderContents(fileUri);
                   }
                } else {
@@ -1154,20 +1371,13 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
          } else { // remote folder
             const remotePathPrefix = new URL(config.remoteEndpoint.url).pathname.replace(/\/lsaf\/webdav\/(work|repo)(?=\/)/, '').replace(/\/$/, '');
             let localPath;
-            // if (os.platform() === 'win32') {
-            //    localPath = path.join(config.workspaceFolder?.uri?.fsPath || config.workspaceFolder,
-            //    config?.localRootPath,
-            //    `|${message.filePath}`.replace(`|${path.win32.normalize(remotePathPrefix)}`, '').replace('|', '')
-            //    );
-            // } else {
-            //    localPath = path.join(config.workspaceFolder?.uri?.fsPath || config.workspaceFolder,
-            //    config?.localRootPath,
-            //    `|${message.filePath}`.replace(`|${path.posix.normalize(remotePathPrefix)}`, '').replace('|', '')
-            //    );
-            // }
-            localPath = vscode.Uri.joinPath(config.workspaceFolder?.uri || vscode.Uri.parse(config.workspaceFolder),
+            let messageFilePath;
+            const dropScheme = true;
+            messageFilePath = pathFromUri(message.filePath, dropScheme);
+            debugger ;;
+            localPath = vscode.Uri.joinPath(config.workspaceFolder?.uri || uriFromString(config.workspaceFolder),
                            config?.localRootPath?.path || config?.localRootPath,
-                           `|${message.filePath}`
+                           `|${messageFilePath}`
                               .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('/', '\\')}`, '')
                               .replace(`|${path.posix.normalize(remotePathPrefix).replaceAll('\\', '/')}`, '')
                               .replace('|', '')
@@ -1184,7 +1394,9 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
                localPathExists = true;
                console.log(`localPath exists: ${localPath}`);
             } catch (error) {
+               debugger ;
                console.log(`localPath does not exist: ${localPath},`, error);
+               localPathExists = false;
             } 
             const actions = [];
             if (localPathExists) {
@@ -1220,7 +1432,7 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
                            if (localPath instanceof vscode.Uri) {
                               restApiFolderContents(localPath, null, config);
                            } else {
-                              restApiFolderContents(vscode.Uri.file(localPath), null, config);
+                              restApiFolderContents(uriFromString(localPath), null, config);
                            }
                         } else {
                            const msg = `(showTwoFoldersView) Action not yet implemented: ${action} for ${message?.config?.label} remote file: ${message.filePath}`;
@@ -1428,7 +1640,7 @@ function getTwoFoldersWebviewContent(bothFoldersContents, folder1Path, isFolder1
             document.querySelectorAll('.folder-${class1link}').forEach(link => {
                link.addEventListener('click', event => {
                event.preventDefault();
-               const filePath = event.target.getAttribute('data-path');
+               const filePath = event.target.getAttribute('data-path').split('|')[0];
                msg = {
                   command: 'openFolder1SubFolder',
                   filePath: filePath,
@@ -1457,7 +1669,7 @@ function getTwoFoldersWebviewContent(bothFoldersContents, folder1Path, isFolder1
             document.querySelectorAll('.folder-${class2link}').forEach(link => {
                link.addEventListener('click', event => {
                event.preventDefault();
-               const filePath = event.target.getAttribute('data-path');
+               const filePath = event.target.getAttribute('data-path').split('|')[0];
                msg = {
                   command: 'openFolder2SubFolder',
                   filePath: filePath,
