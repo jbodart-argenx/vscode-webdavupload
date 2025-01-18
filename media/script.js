@@ -1,8 +1,8 @@
 /* global acquireVsCodeApi */   // Resolve ESLint warning (no-undef)
+const vscode = acquireVsCodeApi(); // Resolve ESLint warning (no-undef)
 
 document.addEventListener('DOMContentLoaded', () => {
    const tableContainer = document.getElementById('table-container');
-   const vscode = acquireVsCodeApi();
 
    function triggerCommand(message) {
       console.log('triggerCommand called with message:', message);
@@ -165,9 +165,6 @@ function sortTableByColumn(columnIndex) {
    sortedRows.forEach(row => tbody.appendChild(row));
 }
 
-function sendMessage() {
-   vscode.postMessage({ command: 'alert', text: 'Hello from the webview!' });
-}
 
 
 window.addEventListener('message', event => {
