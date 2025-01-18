@@ -1,9 +1,10 @@
 const vscode = require('vscode');
-const { read_dataset, read_sas, read_xpt, read_rds, read_sas_size, read_xpt_size, read_rds_size } = require('./read_dataset.js');
-const { getJsonTableWebviewContent } = require('./json-table-view.js');
-const beautify = require("js-beautify");
-const { authTokens } = require('./auth.js');
+const { read_dataset } = require('./read_dataset.js');
+// const { getJsonTableWebviewContent } = require('./json-table-view.js');
+// const beautify = require("js-beautify");
 const { axios } = require("./axios-cookie-jar.js");
+const { uriFromString } = require('./uri.js');
+const { getAuthToken } = require('./auth.js');
 
 class DatasetDocument {
    constructor(uri, data, size) {
@@ -64,7 +65,7 @@ class CustomDatasetPreviewerProvider {
          enableScripts: true,
          localResourceRoots: [
             this.context.extensionUri,
-            vscode.Uri.file(path.join(context.extensionPath, 'media'))
+            uriFromString(path.join(this.context.extensionPath, 'media'))
          ],
          retainContextWhenHidden: true,
          enableCommandUris: true // Enable registered commands to be called as URIs from webview HTML e.g.:
@@ -95,7 +96,7 @@ class CustomDatasetPreviewerProvider {
                   try {
                      const response = await axios.get(message.url,
                         {
-                           headers: { "X-Auth-Token": authTokens[new URL(message.url).host] },
+                           headers: { "X-Auth-Token": getAuthToken(new URL(message.url).host) },
                            maxRedirects: 5 
                         });
                      console.log('axios response:', response);
