@@ -4,7 +4,7 @@ const path = require("path");
 const beautify = require("js-beautify");
 const { createZip, extractZip } = require("./zip.js");
 const { getObjectView } = require("./object-view.js");
-const { uriFromString } = require("./uri.js");
+const { uriFromString, pathFromUri } = require("./uri.js");
 
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
@@ -36,7 +36,7 @@ async function restApiZipUploadAndExpand(param, config = null) {
                restApi.getRemoteFilePath();   // get Remote File Path
             }
          } else {
-            await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
+            await restApi.getEndPointConfig(param, false, false, true);   // based on the passed Uri (if defined)
                                                       // otherwise based on the path of the local file open in the active editor
                                                       // also sets remoteFile
             if (!restApi.config) {
@@ -148,6 +148,7 @@ async function restApiGetRemoteFilePath(param, config = null) {
             let uniquePaths = await getEndpointConfigForCurrentPath(param.fsPath, onlyRepo, getUniquePaths);
             let uniquePathsArray;
             let configFile;
+            let selectedPath;
             if (!Array.isArray(uniquePaths) && typeof uniquePaths === 'object') {
                uniquePathsArray = Object.keys(uniquePaths);
                configFile = uniquePaths[uniquePathsArray[0]][0].configFile;
@@ -156,7 +157,7 @@ async function restApiGetRemoteFilePath(param, config = null) {
             }
             console.log(`uniquePathsArray:`, uniquePathsArray);
             if (uniquePathsArray.length > 1) {
-               const selectedPath = await vscode.window.showQuickPick(uniquePathsArray, {
+               selectedPath = await vscode.window.showQuickPick(uniquePathsArray, {
                   placeHolder: "Choose a remote location",
                   canPickMany: false,
                });
@@ -263,18 +264,18 @@ async function restApiUpload(param, config = null) {
       param = uriFromString(param);
    }
    if (param instanceof vscode.Uri) {
-      vscode.window.showInformationMessage(`Rest API: Uploading File URI: ${param.fsPath}`);
+      vscode.window.showInformationMessage(`Rest API: Uploading File: ${pathFromUri(param)}`);
       try {
          if (config && config.label) {
             restApi.config = config;
             if (param instanceof vscode.Uri) {
                console.log('(restApiUpload) param:', param);
-               restApi.localFile = param.fsPath;
+               restApi.localFile = pathFromUri(param); // param.fsPath;
                restApi.localFileStat = await vscode.workspace.fs.stat(param);
                restApi.getRemoteFilePath();   // get Remote File Path
             }
          } else {
-            await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
+            await restApi.getEndPointConfig(param, false, false, true);   // based on the passed Uri (if defined)
                                                       // otherwise based on the path of the local file open in the active editor
                                                       // also sets remoteFile
             if (!restApi.config) {
@@ -284,6 +285,7 @@ async function restApiUpload(param, config = null) {
          await restApi.uploadFile(param);
          console.log(`Successfully uploaded ${restApi.localFile} to ${restApi.config.label}`)
       } catch (err) {
+         debugger;
          console.log(err);
       }
    } else {
@@ -313,9 +315,11 @@ async function restApiCompare(param, config = null) {
             console.log('(restApiCompare) Unexpected param:', param);
          }
       } else {
-         await restApi.getEndPointConfig(param);   // based on the passed Uri (if defined)
-                                                   // otherwise based on the path of the local file open in the active editor
-                                                   // also sets remoteFile
+         const onlyRepo = false, uniquePaths = false, chooseNewEndpoint = true;
+         await restApi.getEndPointConfig(param, onlyRepo, uniquePaths, chooseNewEndpoint);   
+            // based on the passed Uri (if defined)
+            // otherwise based on the path of the local file open in the active editor
+            // also sets remoteFile
          if (!restApi.config) {
             return;
          }
