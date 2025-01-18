@@ -37,6 +37,15 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
    let restApiConfig = null;
    let allEndpointsConfig;
    let config = {};
+   let selectedConfigLabel;
+
+   // List the folders that are parent of current workspace
+   vscode.workspace.workspaceFolders
+      .map(folder => pathFromUri(folder.uri))
+      .forEach((folder, index) => {
+         console.log(`workspaceFolder[${index}]:`, folder);
+      });
+
    // get the user's home directory
    const userHomeDir = process.env.HOME || process.env.USERPROFILE;
    // check for existing files in the user's home directory: lsafSync.json, .lsf/lsaf.json
@@ -50,11 +59,13 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
       searchFolder = absoluteWorkingDir;
    } 
    while (! configFile && searchFolder.toString() !== vscode.Uri.joinPath(searchFolder, '..').toString()) {
+      let searchFile;
       try {
-         const searchFile = vscode.Uri.joinPath(searchFolder, 'webdav.json');
+         searchFile = vscode.Uri.joinPath(searchFolder, 'webdav.json');
          configFileStat = await vscode.workspace.fs.stat(searchFile);
          if (configFileStat.type === vscode.FileType.File) configFile = searchFile;
       } catch (error) {
+         console.log(`(getEndpointConfigForCurrentPath) File does not exist: "${searchFile}", ${error.message}`);
          configFileStat = error;
          searchFolder = vscode.Uri.joinPath(searchFolder, '..');
       }
@@ -118,11 +129,10 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
                   });
                }
                if (newEndpoints.length > 0) {
-                  debugger;
                   console.log('newEndpoints:', beautify(JSON.stringify(newEndpoints)));
                   // Let the user choose from the list of new endpoints according to label
                   const configChoices = newEndpoints.map((config, index) =>   config.label || "Config " + (index + 1).toString());
-                  const selectedConfigLabel = await vscode.window.showQuickPick(configChoices, {
+                  selectedConfigLabel = await vscode.window.showQuickPick(configChoices, {
                      placeHolder: "Choose a remote location",
                      canPickMany: false,
                   });
@@ -216,7 +226,7 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
          }
          restApiConfig = restApiConfig.map(
             (config, index) => Object.entries(config)
-               .filter(([key, val]) => (val != null && typeof val === 'object' && typeof val.url === 'string'))
+               .filter(([key, val]) => (key != null && val != null && typeof val === 'object' && typeof val.url === 'string'))
                .map(([key, val]) => {
                   let url, path, loc, label, host, lsafUri, returnObject;
                   try {
@@ -325,10 +335,7 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
             if (lastSlashIndex === -1) {
                currentSearchPath = "";
             } else {
-               currentSearchPath = currentSearchPath.slice(
-                  0,
-                  currentSearchPath.lastIndexOf("/")
-               );
+               currentSearchPath = currentSearchPath.slice(0, lastSlashIndex);
             }
 
             if (currentSearchPath === "") {
