@@ -1,13 +1,20 @@
 const vscode = require("vscode");
 const os = require('os');
 const { exec } = require('child_process');
-const { uriFromString } = require('./uri.js');
+const { uriFromString, pathFromUri } = require('./uri.js');
+// const { tmp } = require("tmp");
 
 function openFileWithDefaultApp(filePath) {
    if (filePath instanceof vscode.Uri) {
-      filePath = decodeURIComponent(filePath.fsPath);
+      filePath = pathFromUri(filePath);
+      // filePath = decodeURIComponent(filePath.fsPath);
    } else if (typeof filePath === 'string' && /file:\/\/\//.test(filePath)) {
-      filePath = decodeURIComponent(vscode.Uri.parse(filePath).fsPath);
+      filePath = pathFromUri(uriFromString(filePath));
+      if (filePath !== decodeURIComponent(filePath)) {
+         debugger;;;
+         console.warn(`Check what path is correct: ${filePath} or ${decodeURIComponent(filePath)}`);
+      }
+      filePath = decodeURIComponent(filePath);
    }
    console.log('filePath:', filePath);
    if (os.platform() === 'win32' && !vscode.env.remoteName){
@@ -30,12 +37,22 @@ async function openFileWithMatchingProvider(filePath, max = 3) {
    let fileUri, fileExtension;
    if (filePath instanceof vscode.Uri) {
       fileUri = filePath;
-      filePath = decodeURIComponent(filePath.fsPath);
+      filePath = pathFromUri(filePath);
+      if (filePath !== decodeURIComponent(filePath)) {
+         debugger;;;
+         console.warn(`Check what path is correct: ${filePath} or ${decodeURIComponent(filePath)}`);
+      }
+      filePath = decodeURIComponent(filePath);
    } else if (typeof filePath === 'string' && /file:\/\/\//.test(filePath)) {
-      fileUri = vscode.Uri.parse(filePath);
-      filePath = decodeURIComponent(fileUri.fsPath);
+      fileUri = uriFromString(filePath);
+      filePath = pathFromUri(filePath);
+      if (filePath !== decodeURIComponent(filePath)) {
+         debugger;;;
+         console.warn(`Check what path is correct: ${filePath} or ${decodeURIComponent(filePath)}`);
+      }
+      filePath = decodeURIComponent(filePath);
    } else {
-      fileUri = vscode.Uri.parse(filePath);
+      fileUri = uriFromString(filePath);
    }
    fileExtension = filePath.split('.').pop()
    console.log('(openFileWithMatchingProvider): fileExtension:', fileExtension, ', filePath:', filePath);
