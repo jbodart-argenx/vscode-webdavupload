@@ -8,7 +8,7 @@ const { openFileWithMatchingProvider } = require("./openFile.js");
 const { streamToPromise } = require('./stream.js');
 const { pipeline } = require('stream/promises'); // Node.js v15+ only
 const { showTableView } = require("./json-table-view.js");
-const { read_dataset, read_sas, read_xpt, read_rds } = require("./read_dataset.js");
+const { /*read_dataset,*/ read_sas, read_xpt, read_rds } = require("./read_dataset.js");
 const tmp = require("tmp");
 tmp.setGracefulCleanup();   // remove all controlled temporary objects on process exit
 const { uriFromString } = require('./uri.js');
@@ -16,7 +16,6 @@ const { uriFromString } = require('./uri.js');
 // This is the async function that opens a webview and displays an object / collects edits from the user
 // Even though the function does not use await, marking a function as async ensures it returns a promise.
 // This can be useful if the function needs to be used in a context where a promise is expected.
-// eslint-disable-next-line require-await
 async function getObjectView(inputObject = {}, editable = false, title = "Object Viewer", titleShort = "Object Viewer", context, restApi) {
    return new Promise((resolve, reject) => {
       // Create and show a new webview panel
@@ -137,6 +136,7 @@ async function getObjectView(inputObject = {}, editable = false, title = "Object
                                  responseType = 'arraybuffer';
                               }
                            }
+                           // eslint-disable-next-line eqeqeq
                            if (response.status != 200) {
                               let result;
                               if (contentType.match(/\bjson\b/)) {
