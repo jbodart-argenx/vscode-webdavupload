@@ -7,12 +7,12 @@ function inverseRelativePath(toPath, relativePath) {
    const relativePathParts = relativePath.split('/');
 
    // Remove common parts
-   while (toPathParts.length > 0 && relativePathParts.length > 0 && toPathParts[0] === relativePathParts[0]) {
-      toPathParts.shift();
-      relativePathParts.shift();
+   while (toPathParts.length > 0 && relativePathParts.length > 0 && toPathParts[toPathParts.length-1] === relativePathParts[relativePathParts.length-1]) {
+      toPathParts.pop();
+      relativePathParts.pop();
    }
 
    return toPathParts.join('/');
 }
 
-exports =  { inverseRelativePath };
+module.exports =  { inverseRelativePath };
