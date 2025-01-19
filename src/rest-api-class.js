@@ -20,6 +20,7 @@ const { getObjectView } = require("./object-view.js");
 console.log('(rest-api-class.js) typeof getObjectView:', typeof getObjectView);
 const crypto = require('crypto');
 const { axios } = require("./axios-cookie-jar.js");
+const { inverseRelativePath } = require('./pathUtils.js');
 
 // require('events').EventEmitter.defaultMaxListeners = 20;  // temporary fix
 
@@ -109,22 +110,37 @@ class RestApi {
                //   name: 'cdisc-pilot-0001',
                //   index: 0 }
 
-      const localFilePath = (this.localFile.path ? this.localFile.path : this.localFile).replace(/\\/g, "/");
+      let remoteFile = this.getRemoteFile(this.localFile, config);
+
+
+      /*
+      // const localFilePath = (this.localFile.path ? this.localFile.path : this.localFile).replace(/\\/g, "/");
+      const localFilePath = pathFromUri(this.localFile.path ? this.localFile.path : this.localFile).replace(/\\/g, "/");
       console.log('* localFilePath      :', localFilePath);       // * localFilePath      : /c:/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents
+      // from URI(lsaf-repo://xarprod/general/biostat/gadam/documents/gadam_dshb/gadam_jobs/gadam_jobs_info.sas):
+      // const workingWSFolderPath = workingWSFolder.uri ?        // * localFilePath      : /general/biostat/gadam/documents/gadam_dshb/gadam_jobs/gadam_jobs_info.sas                       
+      //    workingWSFolder.uri.path.replace(/\\/g, "/") :
       const workingWSFolderPath = workingWSFolder.uri ? 
-         workingWSFolder.uri.path.replace(/\\/g, "/") :
+         pathFromUri(workingWSFolder.uri).replace(/\\/g, "/") :
          workingWSFolder.toString().replace(/\\/g, "/");
       console.log('* workingWSFolderPath:', workingWSFolderPath); // * workingWSFolderPath: /c:/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001
+      // const configLocalRootPath = config.localRootPath.path ?  // * workingWSFolderPath: lsaf-repo://xarprod/
+      //    config.localRootPath.path.replace(/\\/g, "/") :
       const configLocalRootPath = config.localRootPath.path ?
-         config.localRootPath.path.replace(/\\/g, "/") :
+         pathFromUri(config.localRootPath).replace(/\\/g, "/") :
          config.localRootPath.replace(/\\/g, "/");
          console.log('* configLocalRootPath:', configLocalRootPath); // * configLocalRootPath: /
-      const joinedPath = path.posix.join(workingWSFolderPath, configLocalRootPath);
+      // const joinedPath = path.posix.join(workingWSFolderPath, configLocalRootPath); // * configLocalRootPath: /
+      const joinedPath = pathFromUri(vscode.Uri.joinPath(uriFromString(workingWSFolderPath), configLocalRootPath), true).replace(/\\/g, "/");
       console.log('* joinedPath         :', joinedPath);          // * joinedPath         : /c:/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/
-      const remoteFile = localFilePath.replace(joinedPath, "");
+      remoteFile = localFilePath.replace(joinedPath, "");     // * joinedPath         : lsaf-repo://xarprod/
       console.log('=> remoteFile:', remoteFile);                    // => remoteFile: biostat/staging/reportingevent/documents
+                                                                    // => remoteFile: /general/biostat/gadam/documents/gadam_dshb/gadam_jobs/gadam_jobs_info.sas
+      */
+
       this.remoteFile = remoteFile; // CHECK ! e.g. biostat/staging/reportingevent/documents
       console.log('this.remoteFile:', this.remoteFile);
+      /*
       if (config?.remoteEndpoint?.lsafUri) {
          // this.remoteFileUri = vscode.Uri.parse(config.remoteEndpoint.lsafUri + remoteFile);  // lacks separator
          // this.remoteFileUri = config.remoteEndpoint.lsafUri.with({path: config.remoteEndpoint.lsafUri.path + remoteFile});  // lacks separator
@@ -148,9 +164,13 @@ class RestApi {
       console.log('this.remoteFileUri:', String(this.remoteFileUri), ', this.remoteFileStat:', this.remoteFileStat);
       // e.g. this.remoteFileUri: lsaf-repo://xartest/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/documents ,
       //      this.remoteFileStat: {type: 2, ctime: 1728305432000, mtime: 1728305748000, size: 0, permissions: 1}
-
-      const url = new URL(this.config.remoteEndpoint.url);
-      this.host = url.hostname;
+      */
+      if (config?.url && config.url instanceof URL) {  
+         this.host = config.url.hostname;
+      } else {
+         const url = new URL(this.config.remoteEndpoint.url);
+         this.host = url.hostname;
+      }
    }
 
 
@@ -188,7 +208,7 @@ class RestApi {
       }
    }
 
-   async logon() {
+   async logon(retry = true) {
       if (this.host && getAuthToken(this.host)) {
          // Check that token is still valid
          const url = `https://${this.host}/lsaf/api/workspace/folders/?component=children`;
@@ -223,7 +243,7 @@ class RestApi {
          } catch (err) {
             debugger;
             console.log(`(logon) Error: ${err}`);
-            if (err.code === "ECONNRESET") {
+            if (err.code === "ECONNRESET" && retry) {
                console.log(`(logon) ECONNRESET: ${err}`);
                return this.logon();
             }
@@ -649,7 +669,7 @@ class RestApi {
                responseType = 'arraybuffer';
             }
          }
-// eslint-disable-next-line eqeqeq
+         // eslint-disable-next-line eqeqeq
          if (response.status != 200) {
             if (contentType.match(/\bjson\b/)) {
                data = response.data;
@@ -772,9 +792,16 @@ class RestApi {
          .replace(/\/lsaf\/webdav\/repo\//, `/repository/${itemType}s/`)
          .replace(/\/$/, '')
          ;
-      console.log('urlPath:', urlPath)
-      const filePath = this.remoteFile?.path ? this.remoteFile.path : this.remoteFile;
-      const apiRequest = `${path.posix.join(urlPath, filePath)}?component=properties`;
+      console.log('urlPath:', urlPath);
+      let remoteFileRelPath;
+      if (typeof this.config?.basePath === 'string' && this.config.url instanceof URL) {
+         let wsFolderPath = "/" + path.posix.relative(this.config.basePath, this.config.url.pathname);
+         remoteFileRelPath = path.posix.relative(wsFolderPath, this.remoteFile.path);
+      } else  {
+         remoteFileRelPath = this.remoteFile?.path ? this.remoteFile.path : this.remoteFile;
+      }
+      // const filePath = this.remoteFile?.path ? this.remoteFile.path : this.remoteFile;
+      const apiRequest = `${path.posix.join(urlPath, remoteFileRelPath)}?component=properties`;
       const requestOptions = {
          headers: { "X-Auth-Token": this.authToken },
          maxRedirects: 5 // Optional, axios follows redirects by default
@@ -846,7 +873,7 @@ class RestApi {
       } else if (fileStat.type !== vscode.FileType.Directory) {
          return vscode.window.showWarningMessage(`Get Local Folder Contents: ${this.localFile} is neither a file nor a folder!`);
       }
-
+      
       let folderContents, folderContentsText;
       try {
          const files = await vscode.workspace.fs.readDirectory(folderUri);
@@ -862,11 +889,11 @@ class RestApi {
                if (type === vscode.FileType.File) {
                   fileType = 'file';
                   if (fileUri.scheme === "file"){
-                  isBinary = isBinaryFile(fileUri.fsPath);
-                  if (isBinary) {
-                     md5sum = await fileMD5sum(fileUri.fsPath);
-                  } else {
-                     md5sum = fileMD5sumStripBom(fileUri.fsPath);
+                     isBinary = isBinaryFile(fileUri.fsPath);
+                     if (isBinary) {
+                        md5sum = await fileMD5sum(fileUri.fsPath);
+                     } else {
+                        md5sum = fileMD5sumStripBom(fileUri.fsPath);
                      }
                   } else {
                      md5sum = '';
@@ -1687,6 +1714,29 @@ class RestApi {
       return [formdata, filename];
    }
 
+   getRemoteFile(localFile, config) {
+      localFile = uriFromString(localFile); 
+      console.log('localFile:', localFile); // URI(file:///c%3A/Users/jbodart/lsaf/files/general/biostat/macros/_library/titles.sas)
+      if ((!config.url || !(config.url instanceof URL)) && config.remoteEndpoint?.url) {
+         config.url = new URL(config.remoteEndpoint.url);
+      }
+      let origin = "lsaf-" + (config.url.pathname).match(/\/lsaf\/webdav\/(repo|work)\//)[1] + "://" + config.url.hostname.split('.')[0];
+      console.log('origin:', origin);                 // lsaf-repo://lsafleeds
+      let basePath = config.basePath ?? (config.url.pathname).match(/\/lsaf\/webdav\/(repo|work)(\/Customer%20Preview\/XAR)?(?=\/)/)[0];
+      console.log("basePath:", basePath);             // "/lsaf/webdav/repo/Customer%20Preview/XAR"
+      let workspaceFolder = vscode.workspace.getWorkspaceFolder(localFile); 
+      console.log("workspaceFolder:", workspaceFolder, ", path:", pathFromUri(workspaceFolder.uri));// {uri: URI(file:///c%3A/Users/jbodart/lsaf/files/general/biostat/macros), name: 'lsaf-repo://lsafleeds/', index: 0}
+      let relPath = path.posix.relative(workspaceFolder.uri.path, localFile.path);
+      console.log("relPath:", relPath);                // _library/titles.sas
+      let relConfDirPath = path.posix.relative(workspaceFolder.uri.path, path.posix.dirname(this.config.configFile.path));
+      console.log("relConfDirPath:", relConfDirPath);  
+      let wsFolderPath = inverseRelativePath("/" + path.posix.relative(basePath, config.url.pathname), relConfDirPath); 
+      console.log("wsFolderPath:", wsFolderPath);     // /general/biostat/macros/
+      let remoteFile = vscode.Uri.parse(origin + path.posix.join(wsFolderPath, relPath));
+      console.log("remoteFile:", remoteFile); // URI("lsaf-repo://lsafleeds/general/biostat/macros/_library/titles.sas")
+      return remoteFile;
+   }
+
    getRemoteFilePath(){
       if (! this.localFile || ! this.config || this.config.localRootPath == null || ! this.config.remoteEndpoint) {
          this.localFile = this.localFile || null;
@@ -1709,8 +1759,9 @@ class RestApi {
       const configLocalRootPath = (this.config.localRootPath.path ?
          pathFromUri(this.config.localRootPath) :
          `${this.config.localRootPath}`).replace(/\\/g, "/");  // e.g. '/'
-      const joinedPath = path.posix.join(workingWSFolderPath, configLocalRootPath);  // e.g. 'c:/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/'
-      const remoteFile = localFilePath.replace(joinedPath, "");  // e.g. 'biostat/staging/reportingevent/documents'
+      // const joinedPath = path.posix.join(workingWSFolderPath, configLocalRootPath);  // e.g. 'c:/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/'
+      const joinedPath = pathFromUri(vscode.Uri.joinPath(uriFromString(workingWSFolderPath), configLocalRootPath)).replace(/\\/g, "/");  // e.g. 'c:/Users/jbodart/lsaf/files/clinical/test/indic/cdisc-pilot-0001/'
+      const remoteFile = localFilePath.replace(joinedPath.replace(/\\/g, "/"), "");  // e.g. 'biostat/staging/reportingevent/documents'
 
       console.log('remoteFile:', remoteFile); 
       this.remoteFile = remoteFile; // CHECK !  // e.g. 'biostat/staging/reportingevent/documents'
@@ -1908,7 +1959,7 @@ class RestApi {
       const filePath = this.remoteFile;
       console.log('(RestApi.uploadFile) source filePath:', filePath);
       let apiRequest = `${path.posix.join(urlPath, filePath)}?action=upload&version=MINOR&createParents=true&overwrite=true`;
-      await this.enterMultiLineComment(`Add / Update ${((this.localFile.path || this.localFile).toString().split(/[\\/]/) || '...').slice(-1)}\n\n`);
+      await this.enterMultiLineComment(`Add / Update ${((this.localFile.path || pathFromUri(this.localFile, true)).toString().split(/[\\/]/) || '...').slice(-1)}\n\n`);
       if (this.comment) {
          apiRequest = `${apiRequest}&comment=${encodeURIComponent(this.comment)}`;
       }
@@ -1930,6 +1981,7 @@ class RestApi {
       let response;
       try {
          fullUrl = apiUrl + apiRequest
+         fullUrl = encodeURI(apiUrl + apiRequest);
          console.log('(RestApi.uploadFile) fullUrl:', fullUrl);
          const controller = new AbortController();
          const timeout = 10_000;
@@ -2016,6 +2068,7 @@ class RestApi {
          vscode.window.showErrorMessage(`(RestApi.uploadFile) Error uploading file "${filename}" to "${apiUrl + path.posix.join(urlPath, filePath)}":`, error);
          console.error(`Error uploading file "${filename}" to "${apiUrl + path.posix.join(urlPath, filePath)}":`, error);
          this.fileContents = null;
+         throw new Error(`Error uploading file "${filename}" to "${apiUrl + path.posix.join(urlPath, filePath)}":`, error);
       }
    }
 
