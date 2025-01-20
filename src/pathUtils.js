@@ -1,3 +1,6 @@
+const vscode = require('vscode');
+const path = require('path');
+
 // Usage: const { inverseRelativePath } = require('./pathUtils.js');
 // Description: Given a reltive path and the destination path (toPath), it returns source path from which the reltive path leads to the destination path.
 
@@ -15,4 +18,31 @@ function inverseRelativePath(toPath, relativePath) {
    return toPathParts.join('/');
 }
 
-module.exports =  { inverseRelativePath };
+function joinPaths(path1, path2) {
+   let joinedPath;
+   if (typeof path1 === 'string' && /^[a-zA-Z][\w+.-]+:\/\//.test(path1)) {
+      // path1 is a URI
+      path1 = vscode.Uri.parse(path1);
+   }
+   if (typeof path1 === 'string') {
+      // count number of '/' in path1
+      const n_fwd = (path1.match(/\//g) || []).length;
+      // count number of '\' in path1
+      const n_bwd = (path1.match(/\\/g) || []).length;
+      if (n_fwd > n_bwd) {
+         joinedPath = path.posix.join(path1, `${path2 || ''}`);
+      } else {
+         joinedPath = path.win32.join(path1, `${path2 || ''}`);
+      }
+   } else if (path1 instanceof vscode.Uri) {
+      try {
+         joinedPath = vscode.Uri.joinPath(path1, `${path2 || ''}`);
+      } catch (error) {
+         debugger;
+         console.error('Error in joinPaths: ', error.message);
+      }
+   }
+   return joinedPath;
+}
+
+module.exports =  { inverseRelativePath, joinPaths };
