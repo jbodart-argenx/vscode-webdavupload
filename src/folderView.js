@@ -870,7 +870,7 @@ async function compareFolderContents(param, config = null, context = null) {
             ', restApi2.remoteFile:', restApi2.remoteFile     // e.g. biostat/staging/reportingevent/documents
          );
          let remoteFolderPath;
-         if (restApi2.config.remoteEndpoint.lsafUri && restApi2.remoteFile) {
+         if (restApi2.config.remoteEndpoint.lsafUri && restApi2.remoteFile != null) {
             try{
                remoteFolderPath = pathFromUri(vscode.Uri.joinPath(uriFromString(restApi2.config.remoteEndpoint.lsafUri), restApi2.remoteFile));  // OK to include scheme ?
                // e.g. 'lsaf-repo://xartest/clinical/test/indic/cdisc-pilot-0001/biostat/staging/reportingevent/dat/test_data'
@@ -1530,8 +1530,11 @@ function getTwoFoldersWebviewContent(bothFoldersContents, folder1Path, isFolder1
                margin-right: 2px;
             }
          /* Assign proportional widths for local, remote, and spacer columns */
-         .local-folder, .remote-folder {
+         .local-folder, .remote-folder, #local-folder, #remote-folder {
             width: 48%;
+            white-space: normal;
+            word-break: break-all;
+            word-wrap: break-word;
          }
          .spacer {
             width: 4%; /* Spacer takes up 6% of the total table width */
@@ -1540,7 +1543,7 @@ function getTwoFoldersWebviewContent(bothFoldersContents, folder1Path, isFolder1
             cursor: auto;
          }
          .folder-header {
-            text-align: center;
+            text-align: left;
             font-weight: bold;
          }
          .higher {
@@ -1582,9 +1585,9 @@ function getTwoFoldersWebviewContent(bothFoldersContents, folder1Path, isFolder1
             <thead>
                <tr>
                   <!-- Headers for Local and Remote sections -->
-                  <th colspan="4" class="local-folder folder-header">${folder1Config.label}: ${folder1Path}</th>
+                  <th colspan="4" id="local-folder" class="local-folder folder-header">${folder1Path}</th>
                   <th class="spacer"></th> <!-- Spacer column between the two sections -->
-                  <th colspan="4" class="remote-folder folder-header">${folder2Config.label}: ${folder2Path}</th>
+                  <th colspan="4" id="remote-folder" class="remote-folder folder-header">${folder2Path}</th>
                </tr>
                <tr>
                <th onclick="sortTable(0)">Name</th>
