@@ -18,7 +18,7 @@ function inverseRelativePath(toPath, relativePath) {
    return toPathParts.join('/');
 }
 
-function joinPaths(path1, path2) {
+function joinPaths(path1, path2, asString = false) {
    let joinedPath;
    if (typeof path1 === 'string' && /^[a-zA-Z][\w+.-]+:\/\//.test(path1)) {
       // path1 is a URI
@@ -41,6 +41,9 @@ function joinPaths(path1, path2) {
          debugger;
          console.error('Error in joinPaths: ', error.message);
       }
+   }
+   if (asString) {
+      joinedPath = joinedPath.toString();
    }
    return joinedPath;
 }
