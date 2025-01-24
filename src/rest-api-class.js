@@ -80,8 +80,8 @@ class RestApi {
       }
 
       // const workingDir = path.posix.dirname(vscode.Uri.joinPath(this.localFile, '..').path);
-      let workingDir = (this.localFileStat?.type === vscode.FileType.Directory) ? this.localFile : vscode.Uri.joinPath(this.localFile, '..');
-      while((await this.getFileStat(workingDir))?.type !== vscode.FileType.Directory) {
+      let workingDir = (this.localFileStat?.type & vscode.FileType.Directory) ? this.localFile : vscode.Uri.joinPath(this.localFile, '..');
+      while(! (await this.getFileStat(workingDir))?.type & vscode.FileType.Directory) {
          workingDir = vscode.Uri.joinPath(workingDir, '..'); // get parent uri --- in case specified path does not exist yet / anymore
       }
 
@@ -776,9 +776,9 @@ class RestApi {
       }
       console.log('Local File:', this.localFile, 'fileStat:', fileStat);
       let itemType;
-      if (fileStat.type === vscode.FileType.File) {
+      if (fileStat.type & vscode.FileType.File) {
          itemType = 'file';
-      } else if (fileStat.type === vscode.FileType.Directory) {
+      } else if (fileStat.type & vscode.FileType.Directory) {
          if (this.config.remoteEndpoint.url.match(/\/lsaf\/webdav\/repo\//)) {
             itemType = 'container';
          } else {
@@ -868,9 +868,9 @@ class RestApi {
       const fileStat = await this.getFileStat(this.localFile);
       console.log('Local File:', this.localFile, 'fileStat:', fileStat);
       // let itemType;
-      if (fileStat.type === vscode.FileType.File) {
+      if (fileStat?.type & vscode.FileType.File) {
          return vscode.window.showWarningMessage(`Get Local Folder Contents: ${this.localFile} is not a folder!`);
-      } else if (fileStat.type !== vscode.FileType.Directory) {
+      } else if (! (fileStat?.type & vscode.FileType.Directory)) {
          return vscode.window.showWarningMessage(`Get Local Folder Contents: ${this.localFile} is neither a file nor a folder!`);
       }
       
@@ -886,7 +886,7 @@ class RestApi {
                let md5sum = '';
                let fileType = '';
 
-               if (type === vscode.FileType.File) {
+                  if (type & vscode.FileType.File) {
                   fileType = 'file';
                   if (fileUri.scheme === "file"){
                      isBinary = isBinaryFile(fileUri.fsPath);
@@ -899,9 +899,9 @@ class RestApi {
                      md5sum = '';
                   }
                } else {
-                  if (type === vscode.FileType.Directory) {
+                     if (type & vscode.FileType.Directory) {
                      fileType = 'directory';
-                  } else if (type === vscode.FileType.SymbolicLink) {
+                     } else if (type & vscode.FileType.SymbolicLink) {
                      fileType = 'symlink';
                   } 
                   md5sum = '';
@@ -962,11 +962,11 @@ class RestApi {
       let fileStat;
       let itemType;
       try {
-         fileStat = await this.getFileStat(this.localFile);
-         if (fileStat.type === vscode.FileType.File) {
-            return vscode.window.showWarningMessage(`Get Remote Folder Contents: ${this.localFile} is not a folder!`);
-         } else if (fileStat.type === vscode.FileType.Directory) {
-            if (this.config.remoteEndpoint.url.match(/\/lsaf\/webdav\/repo\//)) {
+         fileStat = await this.getFileStat(refFile);
+         if (fileStat.type & vscode.FileType.File) {
+            return vscode.window.showWarningMessage(`Get Remote Folder Contents: ${refFile} is not a folder!`);
+         } else if (fileStat.type & vscode.FileType.Directory) {
+            if (`${this.config?.remoteEndpoint?.url}`.match(/\/lsaf\/webdav\/repo\//) || folderUri.scheme === 'lsaf-repo') {
                itemType = 'container';
             } else {
                itemType = 'folder';
@@ -1785,9 +1785,9 @@ class RestApi {
       }
       if (param instanceof vscode.Uri) {
          const fileStat = await this.getFileStat(param);
-         if (fileStat.type === vscode.FileType.File) {
+         if (fileStat.type & vscode.FileType.File) {
             this.localFile = param.fsPath;
-         } else if (fileStat.type === vscode.FileType.Directory) {
+         } else if (fileStat.type & vscode.FileType.Directory) {
             return vscode.window.showWarningMessage(`uploadAndExpand File: ${param.fsPath} is a folder!`);
          } else {
             return vscode.window.showWarningMessage(`uploadAndExpand File: ${param} is neither a file nor a folder!`);
@@ -1915,14 +1915,14 @@ class RestApi {
       if (typeof param === 'string') {
          param = uriFromString(param);
       }
-      if (typeof param === 'boolean') {
-         useEditorContents = param;
-      } else if (param instanceof vscode.Uri) {
-         const fileStat = await this.getFileStat(param);
-         if (fileStat.type === vscode.FileType.File) {
-            this.localFile = param;
-         } else if (fileStat.type === vscode.FileType.Directory) {
-            return vscode.window.showWarningMessage(`Upload File: ${param.path} is a folder!`);
+      if (typeof dest === 'boolean') {
+         useEditorContents = dest;
+      } else if (dest instanceof vscode.Uri) {
+         const fileStat = await this.getFileStat(dest);
+         if (fileStat.type & vscode.FileType.File) {
+            this.localFile = dest;
+         } else if (fileStat.type & vscode.FileType.Directory) {
+            return vscode.window.showWarningMessage(`Upload File: ${dest.path} is a folder!`);
          } else {
             return vscode.window.showWarningMessage(`Upload File: ${param.path} is neither a file nor a folder!`);
          }
