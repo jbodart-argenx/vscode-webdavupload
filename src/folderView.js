@@ -156,7 +156,7 @@ async function localFolderContents(param, context) {
             }
             const newFile = {
                ...file,
-               name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
+               name: file.name.toString() + (fileStat.type & vscode.FileType.Directory ? '/' : ''),
                path: filePath || pathFromUri(fileUri),
                mtime: file.mtime ?? file.lastModified,
                size: file.size ?? 0,
@@ -387,7 +387,7 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                      // const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(fPath));
                      const fileStat = await vscode.workspace.fs.stat(fileUri);
                      let itemType, isBinary;
-                     if (fileStat.type === vscode.FileType.File) {
+                     if (fileStat.type & vscode.FileType.File) {
                         // Ask what to do with local file: Open, Upload, Compare to Remote ?
                         const action = await vscode.window.showQuickPick(['Open', 'Upload', 'Compare to Remote'],
                            {
@@ -496,7 +496,7 @@ function showFolderView(folderPath, folderContents, isLocal, config, context) {
                               } 
                               const newFile = {
                                  ...file,
-                                 name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
+                                 name: file.name.toString() + (fileStat.type & vscode.FileType.Directory ? '/' : ''),
                                  path: filePath || pathFromUri(fileUri),
                                  mtime: file.mtime ?? file.lastModified,
                                  size: file.size ?? 0,
@@ -979,7 +979,7 @@ async function compareFolderContents(param, config = null, context = null) {
                const fileStat = await vscode.workspace.fs.stat(fPath);  // rejected promise not handled within 1 second: Error: Path provided was not a file!
                const newFile = {
                   ...file,
-                  name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
+                  name: file.name.toString() + (fileStat.type & vscode.FileType.Directory ? '/' : ''),
                   path: file.path,
                   mtime: file.mtime ?? file.lastModified,
                   size: file.size ?? 0
@@ -1156,8 +1156,8 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
                         const fileStat = await vscode.workspace.fs.stat(uriFromString(fPath));  // rejected promise not handled within 1 second: Error: Path provided was not a file!
                         const newFile = {
                            ...file,
-                           name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
-                           path: file.path != null ? file.path : path.join(folder1Path, file.name),
+                           name: file.name.toString() + (fileStat.type & vscode.FileType.Directory ? '/' : ''),
+                           path: file.path != null ? file.path : joinPaths(folder1Path, file.name),
                            mtime: file.mtime ?? file.lastModified,
                            size: file.size ?? 0
                         };
@@ -1183,8 +1183,8 @@ function showTwoFoldersView(bothFoldersContents, folder1Path, isFolder1Local, fo
                         const fileStat = await vscode.workspace.fs.stat(uriFromString(fPath));  // rejected promise not handled within 1 second: Error: Path provided was not a file!
                         const newFile = {
                            ...file,
-                           name: file.name.toString() + (fileStat.type === vscode.FileType.Directory ? '/' : ''),
-                           path: file.path != null ? file.path : path.join(folder2Path, file.name),
+                           name: file.name.toString() + (fileStat.type & vscode.FileType.Directory ? '/' : ''),
+                           path: file.path != null ? file.path : joinPaths(folder2Path, file.name),
                            mtime: file.mtime ?? file.lastModified,
                            size: file.size ?? 0
                         };
