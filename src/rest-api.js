@@ -412,14 +412,14 @@ async function restApiDownloadFolderAsZip(param, config = null, expand = null, o
                try {
                   // const lstat = fs.lstatSync(expand.fsPath);
                   const lstat = await vscode.workspace.fs.stat(expand);
-                  if (lstat.type === vscode.FileType.Directory) {
+                  if (lstat.type & vscode.FileType.Directory) {
                      statusMessage = vscode.window.setStatusBarMessage('Extracting...');
                      const expandFolder = vscode.Uri.joinPath(expand, '..');
                      // await extractZip(zipFile, path.dirname(expand.fsPath), overwrite);
                      await extractZip(zipFile, expandFolder, overwrite);
                      console.log(`(restApiDownloadFolderAsZip) Temporary Zip file ${zipFile} was extracted successfully to folder ${expandFolder}`);
                      vscode.window.showInformationMessage(`Temporary Zip file extracted successfully to folder ${expandFolder}`);
-                  } else if (lstat.type === vscode.FileType.File) {
+                  } else if (lstat.type & vscode.FileType.File) {
                      if (zipFile.toString() !== expand.toString() && `file://${zipFile.toString()}` !== expand.toString()) {
                         statusMessage = vscode.window.setStatusBarMessage('Saving...');
                         const zipFileUri = (zipFile instanceof vscode.Uri) ? zipFile : vscode.Uri.parse(zipFile);
