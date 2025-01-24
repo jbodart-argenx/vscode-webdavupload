@@ -1,6 +1,6 @@
 const vscode = require("vscode");
 
-function defineAccessTokenFunctions() {
+const { setAuthToken, getAuthToken, deleteAuthTokens } = (function defineAccessTokenFunctions() {
    // Closure variable to store authentication tokens (in memory only)
    const authTokens = {};
 
@@ -22,9 +22,8 @@ function defineAccessTokenFunctions() {
       delete authTokens[key];
    }
    return { setAuthToken, getAuthToken, deleteAuthTokens };
-}
+})();
 
-const { setAuthToken, getAuthToken, deleteAuthTokens } = defineAccessTokenFunctions();
 
 let secretStorage;
 
