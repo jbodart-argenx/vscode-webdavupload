@@ -63,7 +63,7 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
       try {
          searchFile = vscode.Uri.joinPath(searchFolder, 'webdav.json');
          configFileStat = await vscode.workspace.fs.stat(searchFile);
-         if (configFileStat.type === vscode.FileType.File) configFile = searchFile;
+         if (configFileStat.type & vscode.FileType.File) configFile = searchFile;
       } catch (error) {
          console.log(`(getEndpointConfigForCurrentPath) File does not exist: "${searchFile}", ${error.message}`);
          configFileStat = error;
@@ -79,7 +79,7 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
             try {
                const searchFile = uriFromString(path.join(userHomeDir, homeDirFiles.shift()));
                configFileStat = await vscode.workspace.fs.stat(searchFile);
-               if (configFileStat.type === vscode.FileType.File) configFile = searchFile;
+               if (configFileStat.type & vscode.FileType.File) configFile = searchFile;
             } catch (error) {
                configFileStat = error;
             }
