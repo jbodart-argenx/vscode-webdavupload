@@ -1,6 +1,7 @@
 const vscode = require("vscode");
 const beautify = require("js-beautify");
 const path = require("path");
+const { uriFromString, pathFromUri } = require("./uri");
 
 // Default endpoints are defined in the settings.json file
 // they can be overridden by the user in the settings.json file
@@ -114,7 +115,7 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
                      if (typeof endpoint === 'object' &&
                         typeof endpoint.url === 'string' &&
                         typeof endpoint.label === 'string' && 
-                        endpoint.label !== restApiConfig.labelc&&
+                        endpoint.label !== restApiConfig.label &&
                         onlyRepo ? /\/repo\b/.test(endpoint.label) : true
                      ) {
                         endpoint.localRootFolder = restApiConfig.localRootFolder;
@@ -154,7 +155,9 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
                      configFile
                   }
                   console.log('config:', beautify(JSON.stringify(config)));
-                  console.log(`So "${config.workspaceFolder.uri.with({path: config.workspaceFolder.uri.path + config.localRootPath.path})
+                  // console.log(`So "${config.workspaceFolder.uri.with({path: config.workspaceFolder.uri.path + config.localRootPath.path})
+                  const dropScheme = true;
+                  console.log(`So "${config.workspaceFolder.uri.with({path: pathFromUri(vscode.Uri.joinPath(config.workspaceFolder.uri, config.localRootPath), dropScheme)})
                      }" is the local path that matches the remote location "${config.remoteEndpoint.lsafUri
                      }" at URL: ${config.remoteEndpoint.url
                      }.`);
@@ -181,7 +184,9 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
                      configFile
                   }
                   console.log('config:', beautify(JSON.stringify(config)));
-                  console.log(`So "${config.workspaceFolder.uri.with({path: config.workspaceFolder.uri.path + config.localRootPath.path})
+                  // console.log(`So "${config.workspaceFolder.uri.with({path: config.workspaceFolder.uri.path + config.localRootPath.path})
+const dropScheme = true;
+                  console.log(`So "${config.workspaceFolder.uri.with({path: pathFromUri(vscode.Uri.joinPath(config.workspaceFolder.uri, config.localRootPath), dropScheme)})
                      }" is the local path that matches the remote location "${config.remoteEndpoint.lsafUri
                      }" at URL: ${config.remoteEndpoint.url
                      }.`);
@@ -354,9 +359,19 @@ async function getEndpointConfigForCurrentPath(absoluteWorkingDir, onlyRepo = fa
          }
       }
 
+      console.log('endpointConfigDirectory:', endpointConfigDirectory);
+      console.log('workspaceFolder.uri:', workspaceFolder.uri);
+      console.log('currentSearchPath:', currentSearchPath);
+
+      // currentSearchPath = endpointConfigDirectory.with({path: pathFromUri(endpointConfigDirectory).replace(
+         //    pathFromUri(workspaceFolder.uri), ''
+         // )})
+         // currentSearchPath = pathFromUri(workspaceFolder.uri).replace(pathFromUri(endpointConfigDirectory), '').replace(/\\/g, "/").replace(/^\//, '');
       currentSearchPath = endpointConfigDirectory.with({path: endpointConfigDirectory.path.replace(
          workspaceFolder.uri.path, ''
       )})
+      // currentSearchPath = "/";
+      console.log('(getEndpointConfigForCurrentPath) endpointConfigDirectory:', endpointConfigDirectory, ', currentSearchPath:', currentSearchPath);
 
 
       /* example: endpointConfig =
