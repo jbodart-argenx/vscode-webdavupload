@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 
 async function getKnownSchemes() {
-   const knownSchemes = ['http', 'https', 'ftp', 'file', 'untitled', 'vscode', 'vscode-remote', 'vscode-userdata', 'data'];
+   const knownSchemes = ['http', 'https', 'ftp', 'file', 'untitled', 'vscode', 'vscode-remote', 'vscode-userdata', 'data', 'lsaf-repo', 'lsaf-work'];
 
    // Check for custom schemes registered by extensions
    vscode.extensions.all.forEach(extension => {
@@ -64,15 +64,14 @@ function uriFromString(param) {
    if (param instanceof vscode.Uri) {
       return param;
    }
-   if (param && typeof param === 'string') {
+   if (param != null && typeof param === 'string') {
       try{
          // decide if vscode.Uri.parse or vscode.Uri.file should be used
          // if param matches a URI path, use vscode.Uri.parse
          // otherwise, use vscode.Uri.file
          if (param.match(/^[a-zA-Z]:/) && process.platform === 'win32') {
             param = vscode.Uri.file(param.replace(/^[A-Z]:/, s => s.toLowerCase()));  // Convert windows drive letter to lowercase
-         } else
-         if (param.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:/)) {
+         } else if (param.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:/)) {
             param = vscode.Uri.parse(param.replace(/\\/g, '/'));
          } else {
             param = vscode.Uri.file(param);
@@ -88,6 +87,7 @@ function uriFromString(param) {
 
 function pathFromUri(uri, dropScheme = false) {
    if (typeof uri === 'string') {
+      if (uri === '') return uri;
       uri = uriFromString(uri);
    }
    if (uri instanceof vscode.Uri) {
@@ -139,11 +139,29 @@ function getBaseUri(param) {
    return `file://${path.resolve('./')}/`;
 }
 
+
+async function existsUri(fileUri, type = null) {
+   // type: vscode.FileType.File = 1 | vscode.FileType.Directory = 2 | vscode.FileType.SymbolicLink = 64
+   let exists = false;
+   if (fileUri != null) fileUri = uriFromString(fileUri);
+   if (fileUri && fileUri instanceof vscode.Uri) {
+      try {
+         let stat = await vscode.workspace.fs.stat(fileUri);
+         exists = true;
+         if (type != null) exists = (stat.type === type);
+      } catch (error) {
+         if (error) console.log(`Uri does not exist: ${fileUri},`, error?.code);
+      }
+   }
+   return exists;
+}
+
 module.exports = {
    isValidUri,
    isRelativeUri,
    resolveUri,
    getBaseUri,
    uriFromString,
-   pathFromUri
+   pathFromUri,
+   existsUri
 };
